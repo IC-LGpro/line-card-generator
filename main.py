@@ -17,7 +17,7 @@ def main():
   # Gets airtable records and sorts them into groups of parents and children companies w/ logos, and descriptions 
   airtable_records = fetch_airtable_records(region)
 
-  generate_pdf(airtable_records, logo_path=f"assets/{region}Logo.jpg", output_path="output/line_card.pdf")
+  generate_pdf(airtable_records, logo_path=f"assets/{region}Logo.jpg", output_path="output/line_card.pdf", region=region)
   print("PDF generated successfully at 'output/line_card.pdf'.")
 
 if __name__ == "__main__":
