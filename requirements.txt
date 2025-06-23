@@ -1,0 +1,2 @@
+!pip install reportlab pymupdf
+!pip install qrcode[pil]
