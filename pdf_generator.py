@@ -5,18 +5,56 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.platypus import Image as RLImage
 from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
 import os
+from datetime import datetime
+from reportlab.lib.styles import ParagraphStyle
+
+def create_scaled_image(image_path, target_width):
+    from reportlab.lib.utils import ImageReader
+    image_reader = ImageReader(image_path)
+    orig_width, orig_height = image_reader.getSize()
+    aspect_ratio = orig_height / orig_width
+    target_height = target_width * aspect_ratio
+    return RLImage(image_path, width=target_width, height=target_height
+)
 
 def generate_pdf(airtable_records, output_path, logo_path):
     # Prepare PDF
-    doc = SimpleDocTemplate(output_path, pagesize=letter)
+    doc = SimpleDocTemplate(output_path, pagesize=letter, topMargin=36, bottomMargin=36, leftMargin=9, rightMargin=18)
     elements = []
     downloaded_logos = []
 
     # Add Company logo
     if os.path.exists(logo_path):
-        elements.append(Image(logo_path, width=300, height=150))
+        company_logo = create_scaled_image(logo_path, target_width=3.5 * inch)
+        logo_table = Table([[company_logo]], colWidths=[6.5 * inch])
+        logo_table.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(logo_table)
         elements.append(Spacer(1, 30))
+
+    #Add a title
+    current_year = datetime.now().year
+    title_text = f"{current_year} Line Card"
+
+    title_style = ParagraphStyle(
+        name="TitleStyle",
+        fontSize=24,
+        leading=22,
+        alignment=2, # 0 = left, 1 = center, 2 = right
+        spaceAfter=12,
+        fontName="Helvetica-Bold"
+    )
+    title_paragraph = Paragraph(title_text, title_style)
+    elements.append(title_paragraph)
+    elements.append(Spacer(1, 30))
 
     # Styles for wrapping
     styles = getSampleStyleSheet()
@@ -36,7 +74,7 @@ def generate_pdf(airtable_records, output_path, logo_path):
             with open(logo_filename, "wb") as f:
                 f.write(response.content)
             downloaded_logos.append(logo_filename)
-            parent_logo = RLImage(logo_filename, width=1.8*inch, height=0.8*inch)
+            parent_logo = create_scaled_image(logo_filename, target_width=1.4 * inch)
         else:
             parent_logo = Paragraph("No Logo", styleN)
 
@@ -51,7 +89,7 @@ def generate_pdf(airtable_records, output_path, logo_path):
                 with open(logo_filename, "wb") as f:
                     f.write(response.content)
                 downloaded_logos.append(logo_filename)
-                child_logo = RLImage(logo_filename, width=0.9*inch, height=0.4*inch)
+                child_logo = create_scaled_image(logo_filename, target_width=0.7 * inch)
                 child_logos.append(child_logo)
 
         # --- Description ---
@@ -81,8 +119,8 @@ def generate_pdf(airtable_records, output_path, logo_path):
         row = [parent_logo, right_column_content]
         table = Table([row], colWidths=[2.2*inch, 4.8*inch])
         table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("VALIGN", (0, 0), (-1, -1), "CENTER"),
+            #("LEFTPADDING", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
             ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
