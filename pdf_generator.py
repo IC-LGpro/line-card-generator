@@ -241,13 +241,12 @@ def build_footer(region):
 
 # Function to draw add footer content to the PDF and call the build_footer function
 def make_footer(region):
+    
     # This function will be called to add the footer to each page
     def add_footer(canvas, doc):
-        styles = getSampleStyleSheet()
-        styleN = styles["Normal"]
 
         # You can dynamically determine the region here if needed
-        footer = build_footer(region=region)
+        footer = build_footer(region)
 
         # Wrap and draw the footer at the bottom of the page
         w, h = footer.wrap(doc.width, doc.bottomMargin)
