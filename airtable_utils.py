@@ -36,7 +36,7 @@ def fetch_airtable_records(region):
             break
 
     # Filter records by region
-    filtered = [r["fields"] for r in all_records if region in r["fields"].get("Region", [])]
+    filtered = [r["fields"] for r in all_records if any(region.lower() == reg.lower() for reg in r["fields"].get("Region", []))]
 
     # Group by parent company 
     grouped = {}

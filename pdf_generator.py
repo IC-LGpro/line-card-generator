@@ -37,6 +37,48 @@ def create_cologo_table(logo_path):
         ]))
     return logo_table
 
+def create_header_with_product_image(logo_path, region):
+    elements = []
+
+    # Load company logo
+    cologo = create_scaled_image(logo_path, target_width=3 * inch)
+
+    # Create title
+    current_year = datetime.now().year
+    title_text = f"{current_year} Line Card"
+    title_style = ParagraphStyle(
+        name="TitleStyle",
+        fontSize=24,
+        leading=22,
+        alignment=2,  # Right-align
+        fontName="Helvetica-Bold"
+    )
+    title = Paragraph(title_text, title_style)
+
+    # Top row: logo and title
+    top_table = Table([[cologo, title]], colWidths=[3.25 * inch, 3.25 * inch])
+    top_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    elements.append(top_table)
+
+    # Bottom row: products image
+    product_image_path = f"assets/{region}_products_image.jpg"
+    if os.path.exists(product_image_path):
+        product_image = create_scaled_image(product_image_path, target_width=8.5 * inch)
+        product_table = Table([[product_image]], colWidths=[6.5 * inch])
+        product_table.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(product_table)
+    else:
+        elements.append(Paragraph("Product image not found", getSampleStyleSheet()["Normal"]))
+
+    return elements
+
 # Builds the table content for the PDF
 def build_table_content(airtable_records, downloaded_logos):
 
@@ -110,11 +152,7 @@ def build_table_content(airtable_records, downloaded_logos):
             ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
         tables.append(KeepTogether([table, Spacer(1, 12)]))
-
     return tables, downloaded_logos
-
-
-    # Function to build the content within the footer called by add_footer
 
 # Function to build the footer content
 def build_footer(region):
@@ -148,7 +186,7 @@ def build_footer(region):
     col_widths = []
 
     # Determine footer content based on region
-    if region in ["West", "Pacific Northwest"]:
+    if region in ["west", "pacific northwest"]:
         contact_info_1 = (
             "TEAMWEST@LAWLESSGROUP.COM<br/>"
             "4451 Eucalyptus Ave. #330<br/>"
@@ -158,7 +196,7 @@ def build_footer(region):
         columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
         col_widths = [0.7 * inch, 4.8 * inch, 2 * inch]
 
-    elif region == "Southwest":
+    elif region == "southwest":
         contact_info_1 = (
             "TEAMSOUTH@LAWLESSGROUP.COM<br/>"
             "11625 Columbia Center Drive, Ste. 100<br/>"
@@ -179,7 +217,7 @@ def build_footer(region):
         ]
         col_widths = [0.7 * inch, 2.4 * inch, 2.4 * inch, 1.9 * inch]
 
-    elif region == "Rockies":
+    elif region == "rockies":
         contact_info_1 = (
             "18146 Easy 84th Ave<br/>"
             "Commerce City, CO 80022<br/>"
@@ -198,7 +236,7 @@ def build_footer(region):
         ]
         col_widths = [0.7 * inch, 2.4 * inch, 2.4 * inch, 1.9 * inch]
 
-    elif region == "East":
+    elif region == "east":
         contact_info_1 = (
             "2590 Ocoee Apopka Road, Suite 100<br/>"
             "Apopka, FL 32703<br/>"
@@ -207,7 +245,7 @@ def build_footer(region):
         columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
         col_widths = [0.7 * inch, 4.8 * inch, 2.0 * inch]
 
-    elif region == "Midwest":
+    elif region == "midwest":
         contact_info_1 = (
             "55 W. Army Trail Road, Suite 102<br/>"
             "Glendale Heights, IL 60108<br/>"
@@ -216,7 +254,7 @@ def build_footer(region):
         columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
         col_widths = [0.7 * inch, 4.8 * inch, 2.0 * inch]
 
-    elif region == "North Central":
+    elif region == "north central":
         contact_info_1 = (
             "3225 Harvester Rd.<br/>"
             "Kansas City, KS 66115<br/>"
@@ -241,7 +279,7 @@ def build_footer(region):
 
 # Function to draw add footer content to the PDF and call the build_footer function
 def make_footer(region):
-    
+
     # This function will be called to add the footer to each page
     def add_footer(canvas, doc):
 
@@ -260,33 +298,36 @@ def del_downloaded_logos(downloaded_logos):
             os.remove(logo_filename)
 
 # Primary function to generate the PDF
-def generate_pdf(airtable_records, output_path, logo_path, region):
+def generate_pdf(airtable_records, output_path, logo_path, region, include_products_image):
     # 1. Prepare PDF
     doc = SimpleDocTemplate(output_path, pagesize=letter, topMargin=36, bottomMargin=48, leftMargin=36, rightMargin=36)
     elements = [] # will be used to store the elmenets of the PDF
     downloaded_logos = [] # List to keep track of temporarily downloaded logos from the Airtable records
 
-    # 2. Add Company logo
-    logo_table = create_cologo_table(logo_path)
-    elements.append(logo_table)
-    elements.append(Spacer(1, 30))
+    # 2. Add Company logo & title
+    if include_products_image:
+        header_elements = create_header_with_product_image(logo_path, region)
+        elements.extend(header_elements)
+        elements.append(Spacer(1, 15))
+    else:
+        logo_table = create_cologo_table(logo_path)
+        elements.append(logo_table)
+        elements.append(Spacer(1, 20))
 
-    # 3. Add a title
-    current_year = datetime.now().year
-    title_text = f"{current_year} Line Card"
-
-    title_style = ParagraphStyle(
-        name="TitleStyle",
-        fontSize=24,
-        leading=22,
-        alignment=2, # 0 = left, 1 = center, 2 = right
-        spaceAfter=12,
-        fontName="Helvetica-Bold"
-    )
-    title_paragraph = Paragraph(title_text, title_style)
-    elements.append(title_paragraph)
-    elements.append(Spacer(1, 30))
-
+        current_year = datetime.now().year
+        title_text = f"{current_year} Line Card"
+        title_style = ParagraphStyle(
+            name="TitleStyle",
+            fontSize=24,
+            leading=22,
+            alignment=2,
+            spaceAfter=12,
+            fontName="Helvetica-Bold"
+        )
+        title_paragraph = Paragraph(title_text, title_style)
+        elements.append(title_paragraph)
+        elements.append(Spacer(1, 15))
+        
     # 4. Add the table content
     tables, downloaded_logos = build_table_content(airtable_records, downloaded_logos)
     elements.extend(tables)
