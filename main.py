@@ -16,25 +16,47 @@ def main():
     "pacific northwest": ["oregon", "washington", "alaska"],
     "rockies": ["colorado", "utah", "montana", "wyoming", "idaho"]
 }
+  
+  # Reverse the REGION_STATE_MAP to map states to regions
+  STATE_TO_REGION_MAP = {
+    state: region
+    for region, states in REGION_STATE_MAP.items()
+    for state in states
+    }
+  
   pdf_type = input("Enter the PDF type (state or regional): ").strip().lower()
   
   if pdf_type == 'regional':
     # Filter by region
     region = input("Enter the region (East, Midwest, North Central, Pacific Northwest, Rockies, Southwest, West): ").strip().lower()
-    include_products_image = input("Include images? (yes/no): ").strip().lower() #Option to include product images in the PDF
+    include_products_image = input("Would you like to include product images? (yes/no): ").strip().lower() #Option to include product images in the PDF
     # Gets airtable records and sorts them into groups of parents and children companies w/ logos, and descriptions 
     airtable_records = fetch_airtable_records(region)
-    generate_pdf(airtable_records, logo_path=f"assets/{region}Logo.jpg", output_path="output/line_card.pdf", region=region, include_products_image=include_products_image)
-    print("PDF generated successfully at 'output/line_card.pdf'.")
+    generate_pdf(airtable_records, 
+                 logo_path=f"assets/{region}Logo.jpg", 
+                 output_path=f"output/line_card.pdf", 
+                 region=region, 
+                 include_products_image=include_products_image)
+    print(f"Your {region} Line Card PDF generated successfully at 'output/line_card.pdf'.")
 
   elif pdf_type == 'state':
-    # Filter by state
-    region = input("Enter the region (East, Midwest, North Central, Pacific Northwest, Rockies, Southwest, West): ").strip().lower()
-    available_states = REGION_STATE_MAP.get(region, [])
-    state = input(f"Enter a state ({', '.join(available_states)}): ").strip().lower()
+    state = input("Enter a state: ").strip().lower()
+    region = STATE_TO_REGION_MAP.get(state)
+
+    if not region:
+        print("Invalid state selection.")
+        return
+
     airtable_records = fetch_airtable_records(region, state=state)
-    generate_pdf_state(airtable_records, logo_path=f"assets/{region}Logo.jpg", output_path="output/line_card.pdf", region=region, state=state)
-    print("State PDF generated successfully at 'output/line_card.pdf'.")
+    generate_pdf_state(
+        airtable_records,
+        logo_path=f"assets/{region}Logo.jpg",
+        output_path=f"output/line_card.pdf",
+        region=region,
+        state=state
+    )
+    print(f"Your {state} Line Card PDF generated successfully at 'output/line_card.pdf'.")
+
 
 
 if __name__ == "__main__":
