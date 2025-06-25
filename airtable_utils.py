@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def fetch_airtable_records(region):
+def fetch_airtable_records(region, state=None):
     """
     Fetch all records from the Airtable table with pagination.
     Returns a list of records.
@@ -37,6 +37,17 @@ def fetch_airtable_records(region):
 
     # Filter records by region
     filtered = [r["fields"] for r in all_records if any(region.lower() == reg.lower() for reg in r["fields"].get("Region", []))]
+
+    # If filtering by state to further narrow down
+    if state:
+        filtered = [
+            r for r in filtered
+            if state.lower() in([s.strip().lower() for s in r.get("Manufacturer States", [])] 
+                                if isinstance(r.get("Manufacturer States", ""), list)
+                                else [s.strip().lower() for s in r.get("Manufacturer States", "").split(",")]
+                )
+            ]
+
 
     # Group by parent company 
     grouped = {}
