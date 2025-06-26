@@ -1,3 +1,5 @@
+#This file contains utility functions for generating PDF line cards, including image handling, table creation, and footer generation.
+# It also includes functions for cleaning up temporary files and managing the output folder.
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle

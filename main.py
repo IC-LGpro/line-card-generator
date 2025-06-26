@@ -1,4 +1,7 @@
-# Imports
+# This program contains the main logic for generating PDF line cards based on user input.
+# It allows users to generate either regional or state-specific line cards by fetching records from Airtable
+# and generating PDFs with the relevant information.
+#  Imports
 from airtable_utils import fetch_airtable_records
 from pdf_generator import generate_pdf
 from pdf_generator_state import generate_pdf_state

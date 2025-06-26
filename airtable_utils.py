@@ -1,5 +1,6 @@
 # airtable_utils.py
-# Utility functions for fetching records from Airtable
+# This file contains utility functions for fetching records from Airtable.
+# It includes functions to handle pagination, filtering by region and state, and grouping records by parent
 import requests
 import os
 from dotenv import load_dotenv

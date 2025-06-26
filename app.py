@@ -1,4 +1,6 @@
 # app.py
+# This FastAPI application serves a form for generating PDF line cards based on regions or states.
+# It allows users to select a region or state, fetches records from Airtable, and generates PDFs with the relevant information.
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
