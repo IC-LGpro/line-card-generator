@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 from reportlab.platypus import KeepTogether
 
-from utils import create_scaled_image, build_table_content, make_footer, del_downloaded_logos
+from utils import create_scaled_image, build_table_content, make_footer, del_downloaded_logos, cleanup_output_folder
 
 def create_state_header(state, logo_path):
     styles = getSampleStyleSheet()
@@ -58,3 +58,5 @@ def generate_pdf_state(airtable_records, output_path, logo_path, region, state):
 
     # Cleanup
     del_downloaded_logos(downloaded_logos)
+    cleanup_output_folder()
+    

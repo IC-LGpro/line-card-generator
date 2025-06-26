@@ -6,6 +6,7 @@ from reportlab.lib import colors
 from datetime import datetime
 import os
 import requests
+import time
 
 def create_scaled_image(image_path, target_width, max_height=650):
     image_reader = ImageReader(image_path)
@@ -31,7 +32,7 @@ def build_table_content(airtable_records, downloaded_logos):
         parent_logo_info = parent.get("Logos", []) if parent else []
         if parent_logo_info:
             logo_url = parent_logo_info[0]["url"]
-            logo_filename = f"temp_logos/logo_{parent_name.replace(' ', '_')}.png"
+            logo_filename = f"assets/temp_logos/logo_{parent_name.replace(' ', '_')}.png"
             response = requests.get(logo_url)
             with open(logo_filename, "wb") as f:
                 f.write(response.content)
@@ -45,7 +46,7 @@ def build_table_content(airtable_records, downloaded_logos):
             child_logo_info = child.get("Logos", [])
             if child_logo_info:
                 logo_url = child_logo_info[0]["url"]
-                logo_filename = f"temp_logos/child_logo_{parent_name.replace(' ', '_')}_{i}.png"
+                logo_filename = f"assets/temp_logos/child_logo_{parent_name.replace(' ', '_')}_{i}.png"
                 response = requests.get(logo_url)
                 with open(logo_filename, "wb") as f:
                     f.write(response.content)
@@ -221,3 +222,15 @@ def del_downloaded_logos(downloaded_logos):
     for logo_filename in downloaded_logos:
         if os.path.exists(logo_filename):
             os.remove(logo_filename)
+
+def cleanup_output_folder(folder="output", max_age_seconds=60):
+    now = time.time()
+    if not os.path.exists(folder):
+        return  # Skip if folder doesn't exist
+    for filename in os.listdir(folder):
+        filepath = os.path.join(folder, filename)
+        if os.path.isfile(filepath):
+            file_age = now - os.path.getmtime(filepath)
+            if file_age > max_age_seconds:
+                os.remove(filepath)
+                print(f"Deleted {filepath}")

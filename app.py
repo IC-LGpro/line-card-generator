@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.staticfiles import StaticFiles
+from datetime import datetime
 
 from airtable_utils import fetch_airtable_records
 from pdf_generator import generate_pdf
@@ -53,15 +54,23 @@ def generate_regional_pdf(request: RegionalPDFRequest):
     if region not in REGION_STATE_MAP:
         raise HTTPException(status_code=400, detail="Invalid region name.")
     
+    timestamp = datetime.now().strftime("%Y%m%d")
+    filename = f"{region}_Linecard_{timestamp}.pdf"
+
     airtable_records = fetch_airtable_records(region)
     generate_pdf(
         airtable_records,
         logo_path=f"assets/{region}Logo.jpg",
-        output_path="output/line_card.pdf",
+        output_path = f"output/{filename}",
         region=region,
         include_products_image="yes" if request.include_products_image else "no"
     )
-    return {"message": f"{region.title()} Line Card PDF generated successfully.", "path": "output/line_card.pdf"}
+    return {
+    "message": f"{region.title()} Line Card PDF generated successfully.",
+    "path": f"output/{filename}",
+    "filename": filename
+    }
+
 
 @app.post("/generate-pdf/state")
 def generate_state_pdf(request: StatePDFRequest):
@@ -70,12 +79,24 @@ def generate_state_pdf(request: StatePDFRequest):
     if not region:
         raise HTTPException(status_code=400, detail="Invalid state name.")
     
+    timestamp = datetime.now().strftime("%Y%m%d")
+    filename = f"{state}_Linecard_{timestamp}.pdf"
+
     airtable_records = fetch_airtable_records(region, state=state)
     generate_pdf_state(
         airtable_records,
         logo_path=f"assets/{region}Logo.jpg",
-        output_path="output/line_card.pdf",
+        output_path = f"output/{filename}",
         region=region,
         state=state
     )
-    return {"message": f"{state.title()} Line Card PDF generated successfully.", "path": "output/line_card.pdf"}
+    return {
+    "message": f"{state.title()} Line Card PDF generated successfully.",
+    "path": f"output/{filename}",
+    "filename": filename
+    }
+
+
+
+# To run the FastAPI app, use the command:
+# uvicorn app:app --reload

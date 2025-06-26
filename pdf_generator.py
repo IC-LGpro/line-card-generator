@@ -7,7 +7,7 @@ from datetime import datetime
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import KeepTogether
 
-from utils import create_scaled_image, build_table_content, make_footer, del_downloaded_logos
+from utils import create_scaled_image, build_table_content, make_footer, del_downloaded_logos, cleanup_output_folder
 
 # Function creates the company logo table (the first element on the pdf)
 def create_cologo_table(logo_path):
@@ -113,3 +113,4 @@ def generate_pdf(airtable_records, output_path, logo_path, region, include_produ
 
     # 6. Clean up downloaded logo files
     del_downloaded_logos(downloaded_logos)
+    cleanup_output_folder()

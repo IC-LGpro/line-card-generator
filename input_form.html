@@ -155,11 +155,12 @@
       const result = await response.json();
       const pdfUrl = `http://127.0.0.1:8000/${result.path}`;
 
+      const filename = result.filename || 'line_card.pdf';
       resultBox.innerHTML = `
         <p><strong>${result.message}</strong></p>
         <iframe src="${pdfUrl}" width="100%" height="500px"></iframe><br>
         <div class="download_btn_container">
-          <a class="download_btn" href="${pdfUrl}" download>Download PDF</a>
+          <a class="download_btn" href="${pdfUrl}" download="${filename}">Download PDF</a>
         </div>
       `;
     });
