@@ -37,8 +37,6 @@ def main():
                  output_path=f"output/line_card.pdf", 
                  region=region, 
                  include_products_image=include_products_image)
-    print(f"Your {region} Line Card PDF generated successfully at 'output/line_card.pdf'.")
-
   elif pdf_type == 'state':
     state = input("Enter a state: ").strip().lower()
     region = STATE_TO_REGION_MAP.get(state)
@@ -55,9 +53,7 @@ def main():
         region=region,
         state=state
     )
-    print(f"Your {state} Line Card PDF generated successfully at 'output/line_card.pdf'.")
 
 
-
-if __name__ == "__main__":
-  main()
+'''if __name__ == "__main__":
+  main()'''

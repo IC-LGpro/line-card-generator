@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lawless Group Line Cards</title>
+  <link rel="stylesheet" href="/static/form_styling.css">
+  <style>
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Generate Line Card PDF</h1>
+    <form id="pdfForm">
+      <label>Choose PDF Type:</label><br>
+      <input type="radio" name="pdf_type" value="state" required> State<br>
+      <input type="radio" name="pdf_type" value="regional"> Regional<br><br>
+
+      <div id="stateSection" class="hidden">
+        <label for="state">Select State:</label>
+        <select id="stateDropdown" name="stateDropdown">
+          <option value="">--Select State--</option>
+          <option value="alabama">Alabama</option>
+          <option value="alaska">Alaska</option>
+          <option value="arizona">Arizona</option>
+          <option value="arkansas">Arkansas</option>
+          <option value="california">California</option>
+          <option value="colorado">Colorado</option>
+          <option value="connecticut">Connecticut</option>
+          <option value="delaware">Delaware</option>
+          <option value="florida">Florida</option>
+          <option value="georgia">Georgia</option>
+          <option value="hawaii">Hawaii</option>
+          <option value="idaho">Idaho</option>
+          <option value="illinois">Illinois</option>
+          <option value="indiana">Indiana</option>
+          <option value="iowa">Iowa</option>
+          <option value="kansas">Kansas</option>
+          <option value="kentucky">Kentucky</option>
+          <option value="louisiana">Louisiana</option>
+          <option value="maine">Maine</option>
+          <option value="maryland">Maryland</option>
+          <option value="massachusetts">Massachusetts</option>
+          <option value="michigan">Michigan</option>
+          <option value="minnesota">Minnesota</option>
+          <option value="mississippi">Mississippi</option>
+          <option value="missouri">Missouri</option>
+          <option value="montana">Montana</option>
+          <option value="nebraska">Nebraska</option>
+          <option value="nevada">Nevada</option>
+          <option value="new_hampshire">New Hampshire</option>
+          <option value="new_jersey">New Jersey</option>
+          <option value="new_mexico">New Mexico</option>
+          <option value="new_york">New York</option>
+          <option value="north_carolina">North Carolina</option>
+          <option value="north_dakota">North Dakota</option>
+          <option value="ohio">Ohio</option>
+          <option value="oklahoma">Oklahoma</option>
+          <option value="oregon">Oregon</option>
+          <option value="pennsylvania">Pennsylvania</option>
+          <option value="rhode_island">Rhode Island</option>
+          <option value="south_carolina">South Carolina</option>
+          <option value="south_dakota">South Dakota</option>
+          <option value="tennessee">Tennessee</option>
+          <option value="texas">Texas</option>
+          <option value="utah">Utah</option>
+          <option value="vermont">Vermont</option>
+          <option value="virginia">Virginia</option>
+          <option value="washington">Washington</option>
+          <option value="west_virginia">West Virginia</option>
+          <option value="wisconsin">Wisconsin</option>
+          <option value="wyoming">Wyoming</option>
+        </select><br><br>
+      </div>
+
+      <div id="regionalSection" class="hidden">
+        <label for="include_images">Include Product Images?</label>
+        <input type="checkbox" id="include_images" name="include_images"><br><br>
+
+        <label for="region">Select Region:</label>
+        <select id="region" name="region">
+          <option value="">--Select Region--</option>
+          <option value="east">East</option>
+          <option value="midwest">Midwest</option>
+          <option value="north central">North Central</option>
+          <option value="pacific northwest">Pacific Northwest</option>
+          <option value="rockies">Rockies</option>
+          <option value="southwest">Southwest</option>
+          <option value="west">West</option>
+        </select><br><br>
+      </div>
+
+      <button type="submit">Generate PDF</button>
+    </form>
+    <div id="resultBox" style="margin-top: 20px;"></div>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const pdfForm = document.getElementById('pdfForm');
+    const stateSection = document.getElementById('stateSection');
+    const regionalSection = document.getElementById('regionalSection');
+
+    document.querySelectorAll('input[name="pdf_type"]').forEach(radio => {
+      radio.addEventListener('change', function () {
+        if (this.value === 'state') {
+          stateSection.classList.remove('hidden');
+          regionalSection.classList.add('hidden');
+        } else if (this.value === 'regional') {
+          regionalSection.classList.remove('hidden');
+          stateSection.classList.add('hidden');
+        }
+      });
+    });
+
+    pdfForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const pdfType = document.querySelector('input[name="pdf_type"]:checked').value;
+      const resultBox = document.getElementById('resultBox');
+      resultBox.innerHTML = "Generating PDF...";
+
+      let response;
+      if (pdfType === 'state') {
+        const state = document.getElementById('stateDropdown').value;
+        if (!state) {
+          resultBox.innerHTML = "<p style='color:red;'>Please select a state.</p>";
+          return;
+        }
+
+        response = await fetch('http://127.0.0.1:8000/generate-pdf/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state })
+        });
+      } else {
+        const region = document.getElementById('region').value;
+        const includeImages = document.getElementById('include_images').checked;
+
+        if (!region) {
+          resultBox.innerHTML = "<p style='color:red;'>Please select a region.</p>";
+          return;
+        }
+
+        response = await fetch('http://127.0.0.1:8000/generate-pdf/regional', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            region,
+            include_products_image: includeImages
+          })
+        });
+      }
+
+      const result = await response.json();
+      const pdfUrl = `http://127.0.0.1:8000/${result.path}`;
+
+      resultBox.innerHTML = `
+        <p><strong>${result.message}</strong></p>
+        <iframe src="${pdfUrl}" width="100%" height="500px"></iframe><br>
+        <div class="download_btn_container">
+          <a class="download_btn" href="${pdfUrl}" download>Download PDF</a>
+        </div>
+      `;
+    });
+  });
+</script>
+</body>
+</html>
