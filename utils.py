@@ -128,16 +128,17 @@ def build_footer(region):
 
     elif region == "southwest":
         contact_info_1 = (
-            "TEAMSOUTH@LAWLESSGROUP.COM<br/>"
             "11625 Columbia Center Drive, Ste. 100<br/>"
             "Dallas, TX 75299<br/>"
-            "972-247-8871"
+            "P: 972-247-8871<br/>"
+            "F: 972-620-1147"
+
         )
         contact_info_2 = (
-            "TEAMSOUTH@LAWLESSGROUP.COM<br/>"
             "13323 S. Gessner Road, Ste.100<br/>"
             "Missouri City, TX 77489<br/>"
-            "281-491-0351"
+            "P: 281-491-0351<br/>"
+            "F: 281-491-0367"
         )
         columns = [
             icon,
@@ -168,6 +169,7 @@ def build_footer(region):
 
     elif region == "east":
         contact_info_1 = (
+            "TEAMEAST@LAWLESSGROUP.COM<br/>"
             "2590 Ocoee Apopka Road, Suite 100<br/>"
             "Apopka, FL 32703<br/>"
             "407-831-6676"
@@ -177,6 +179,7 @@ def build_footer(region):
 
     elif region == "midwest":
         contact_info_1 = (
+            "Mike.Fisher@lawlessgroup.com | Tim.Weber@lawlessgroup.com<br/>"
             "55 W. Army Trail Road, Suite 102<br/>"
             "Glendale Heights, IL 60108<br/>"
             "630-931-5636"
