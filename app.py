@@ -6,6 +6,10 @@ from pydantic import BaseModel
 from typing import Optional
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+import os
 
 from airtable_utils import fetch_airtable_records
 from pdf_generator import generate_pdf
