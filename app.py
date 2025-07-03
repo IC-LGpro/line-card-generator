@@ -19,10 +19,13 @@ from fastapi.responses import HTMLResponse
 
 app = FastAPI()
 
+
+templates = Jinja2Templates(directory="templates")
+
 @app.get("/", response_class=HTMLResponse)
-def serve_form():
-    with open("input_form.html", "r") as f:
-        return f.read()
+async def read_root(request: Request):
+    return templates.TemplateResponse("input_form.html", {"request": request})
+
     
 # Mount the output directory to serve static files
 app.mount("/output", StaticFiles(directory="output"), name="output")
