@@ -1,4 +1,4 @@
 PassengerAppRoot /home/isaiahcreagh/line-card-generator
 PassengerPython /home/isaiahcreagh/virtualenv/line-card-generator/3.x/bin/python
 PassengerAppType wsgi
-PassengerStartupFile wsgi.py
+PassengerStartupFile passenger_wsgi.py
