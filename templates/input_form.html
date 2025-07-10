@@ -128,7 +128,7 @@
           return;
         }
 
-        response = await fetch('http://127.0.0.1:8000/generate-pdf/state', {
+        response = await fetch('/generate-pdf/state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state })
@@ -142,7 +142,7 @@
           return;
         }
 
-        response = await fetch('http://127.0.0.1:8000/generate-pdf/regional', {
+        response = await fetch('/generate-pdf/regional', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -153,7 +153,7 @@
       }
 
       const result = await response.json();
-      const pdfUrl = `http://127.0.0.1:8000/${result.path}`;
+      const pdfUrl = result.path;
 
       const filename = result.filename || 'line_card.pdf';
       resultBox.innerHTML = `
