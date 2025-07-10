@@ -1,6 +1,4 @@
-RewriteEngine On
-RewriteBase /line-card-generator/
-RewriteCond %{REQUEST_URI} ^/line-card-generator
-RewriteRule ^line-card-generator(/.*)?$ http://127.0.0.1:8000$1 [P,L]
-
-ProxyPassReverse /line-card-generator http://127.0.0.1:8000
+PassengerAppRoot /home/isaiahcreagh/line-card-generator
+PassengerPython /home/isaiahcreagh/virtualenv/line-card-generator/3.x/bin/python
+PassengerAppType wsgi
+PassengerStartupFile wsgi.py
