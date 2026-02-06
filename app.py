@@ -35,14 +35,29 @@ STATE_TO_REGION_MAP = {
     for state in states
 }
 
+@app.before_request
+def log_request():
+    try:
+        logging.info("Incoming request: %s %s from %s", request.method, request.path, request.remote_addr)
+        # Log small payloads for diagnostics
+        data = request.get_data(as_text=True)
+        if data:
+            logging.info("Payload: %s", data[:200])
+    except Exception:
+        logging.exception("Error while logging request")
+
 @app.route("/", methods=["GET"])
 def index():
     return render_template("input_form.html")
 
-@app.route("/generate-pdf/regional", methods=["POST"])
+@app.route("/generate-pdf/regional", methods=["POST", "GET", "OPTIONS"])
 def generate_regional_pdf():
+    # If a non-POST reached this endpoint, return a JSON explanation (helps debugging when JS isn't running)
+    if request.method != "POST":
+        return jsonify({"error": "Method not allowed. This endpoint expects a POST with JSON body."}), 405
+
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         region = (data.get("region", "") or "").lower()
         include_images = data.get("include_products_image", False)
 
@@ -66,7 +81,6 @@ def generate_regional_pdf():
             include_products_image="yes" if include_images else "no"
         )
 
-        # Return a web-accessible URL path (not the filesystem path)
         url_path = f"/output/{filename}"
 
         return jsonify({
@@ -79,10 +93,13 @@ def generate_regional_pdf():
         logging.error("Error generating regional PDF: %s", traceback.format_exc())
         return jsonify({"error": "Server error generating PDF", "detail": str(e)}), 500
 
-@app.route("/generate-pdf/state", methods=["POST"])
+@app.route("/generate-pdf/state", methods=["POST", "GET", "OPTIONS"])
 def generate_state_pdf():
+    if request.method != "POST":
+        return jsonify({"error": "Method not allowed. This endpoint expects a POST with JSON body."}), 405
+
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         # Normalize underscores from the client (e.g. new_york -> new york)
         state = (data.get("state", "") or "").lower().replace("_", " ").strip()
         region = STATE_TO_REGION_MAP.get(state)
