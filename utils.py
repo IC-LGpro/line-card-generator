@@ -9,9 +9,18 @@ from datetime import datetime
 import os
 import requests
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 def create_scaled_image(image_path, target_width, max_height=650):
-    image_reader = ImageReader(image_path)
+    try:
+        image_reader = ImageReader(image_path)
+    except Exception:
+        logger.warning("create_scaled_image: image not found or unreadable: %s", image_path)
+        # Return a Paragraph placeholder so calling code can continue
+        return Paragraph("Image not available", getSampleStyleSheet()["Normal"])
+
     orig_width, orig_height = image_reader.getSize()
     aspect_ratio = orig_height / orig_width
     target_height = target_width * aspect_ratio
@@ -31,15 +40,31 @@ def build_table_content(airtable_records, downloaded_logos):
         parent = group["parent"]
         children = group["children"]
 
+        # sanitize parent_name for filenames
+        safe_parent = "".join(c if (c.isalnum() or c in (' ', '_', '-')) else '_' for c in (parent_name or "unknown"))
+        safe_parent = safe_parent.replace(' ', '_')
+
         parent_logo_info = parent.get("Logos", []) if parent else []
         if parent_logo_info:
-            logo_url = parent_logo_info[0]["url"]
-            logo_filename = f"assets/temp_logos/logo_{parent_name.replace(' ', '_')}.png"
-            response = requests.get(logo_url)
-            with open(logo_filename, "wb") as f:
-                f.write(response.content)
-            downloaded_logos.append(logo_filename)
-            parent_logo = create_scaled_image(logo_filename, target_width=1.4 * inch)
+            try:
+                logo_url = parent_logo_info[0].get("url")
+                logo_filename = f"assets/temp_logos/logo_{safe_parent}.png"
+                # Ensure directory exists before writing
+                temp_dir = os.path.dirname(logo_filename)
+                os.makedirs(temp_dir, exist_ok=True)
+
+                resp = requests.get(logo_url, timeout=30)
+                if resp.status_code == 200:
+                    with open(logo_filename, "wb") as f:
+                        f.write(resp.content)
+                    downloaded_logos.append(logo_filename)
+                    parent_logo = create_scaled_image(logo_filename, target_width=1.4 * inch)
+                else:
+                    logger.warning("Failed to download parent logo %s: status %s", logo_url, resp.status_code)
+                    parent_logo = Paragraph("No Logo", styleN)
+            except Exception as ex:
+                logger.exception("Error downloading parent logo for %s: %s", parent_name, ex)
+                parent_logo = Paragraph("No Logo", styleN)
         else:
             parent_logo = Paragraph("No Logo", styleN)
 
@@ -47,14 +72,23 @@ def build_table_content(airtable_records, downloaded_logos):
         for i, child in enumerate(children):
             child_logo_info = child.get("Logos", [])
             if child_logo_info:
-                logo_url = child_logo_info[0]["url"]
-                logo_filename = f"assets/temp_logos/child_logo_{parent_name.replace(' ', '_')}_{i}.png"
-                response = requests.get(logo_url)
-                with open(logo_filename, "wb") as f:
-                    f.write(response.content)
-                downloaded_logos.append(logo_filename)
-                child_logo = create_scaled_image(logo_filename, target_width=0.6 * inch)
-                child_logos.append(child_logo)
+                try:
+                    logo_url = child_logo_info[0].get("url")
+                    logo_filename = f"assets/temp_logos/child_logo_{safe_parent}_{i}.png"
+                    temp_dir = os.path.dirname(logo_filename)
+                    os.makedirs(temp_dir, exist_ok=True)
+
+                    resp = requests.get(logo_url, timeout=30)
+                    if resp.status_code == 200:
+                        with open(logo_filename, "wb") as f:
+                            f.write(resp.content)
+                        downloaded_logos.append(logo_filename)
+                        child_logo = create_scaled_image(logo_filename, target_width=0.6 * inch)
+                        child_logos.append(child_logo)
+                    else:
+                        logger.warning("Failed to download child logo %s: status %s", logo_url, resp.status_code)
+                except Exception as ex:
+                    logger.exception("Error downloading child logo for %s child %d: %s", parent_name, i, ex)
 
         description = parent.get("Description", "No description available.") if parent else "No description available."
         description_paragraph = Paragraph(description, styleN)
