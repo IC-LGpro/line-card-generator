@@ -90,7 +90,7 @@
         </select><br><br>
       </div>
 
-      <button type="submit">Generate PDF</button>
+      <button id="generateBtn" type="submit">Generate PDF</button>
     </form>
     <div id="resultBox" style="margin-top: 20px;"></div>
   </div>
@@ -100,6 +100,8 @@
     const pdfForm = document.getElementById('pdfForm');
     const stateSection = document.getElementById('stateSection');
     const regionalSection = document.getElementById('regionalSection');
+    const generateBtn = document.getElementById('generateBtn');
+    const resultBox = document.getElementById('resultBox');
 
     document.querySelectorAll('input[name="pdf_type"]').forEach(radio => {
       radio.addEventListener('change', function () {
@@ -116,55 +118,87 @@
     pdfForm.addEventListener('submit', async function (e) {
       e.preventDefault();
 
-      const pdfType = document.querySelector('input[name="pdf_type"]:checked').value;
-      const resultBox = document.getElementById('resultBox');
       resultBox.innerHTML = "Generating PDF...";
+      generateBtn.disabled = true;
 
-      let response;
-      if (pdfType === 'state') {
-        const state = document.getElementById('stateDropdown').value;
-        if (!state) {
-          resultBox.innerHTML = "<p style='color:red;'>Please select a state.</p>";
+      try {
+        const pdfType = document.querySelector('input[name="pdf_type"]:checked').value;
+        let response;
+
+        if (pdfType === 'state') {
+          const state = document.getElementById('stateDropdown').value;
+          if (!state) {
+            resultBox.innerHTML = "<p style='color:red;'>Please select a state.</p>";
+            generateBtn.disabled = false;
+            return;
+          }
+
+          response = await fetch('/generate-pdf/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state })
+          });
+        } else {
+          const region = document.getElementById('region').value;
+          const includeImages = document.getElementById('include_images').checked;
+
+          if (!region) {
+            resultBox.innerHTML = "<p style='color:red;'>Please select a region.</p>";
+            generateBtn.disabled = false;
+            return;
+          }
+
+          response = await fetch('/generate-pdf/regional', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              region,
+              include_products_image: includeImages
+            })
+          });
+        }
+
+        // If server returned non-2xx, read text/json and show the message (do NOT set iframe)
+        if (!response.ok) {
+          const contentType = response.headers.get('content-type') || '';
+          let text = await response.text();
+          try {
+            if (contentType.includes('application/json')) {
+              const errorObj = JSON.parse(text);
+              text = errorObj.error || errorObj.message || JSON.stringify(errorObj);
+            }
+          } catch (parseErr) {
+            // leave text as-is if not valid JSON
+          }
+          resultBox.innerHTML = `<p style="color:red;">Server error (${response.status}): ${text}</p>`;
+          generateBtn.disabled = false;
           return;
         }
 
-        response = await fetch('/generate-pdf/state', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state })
-        });
-      } else {
-        const region = document.getElementById('region').value;
-        const includeImages = document.getElementById('include_images').checked;
-
-        if (!region) {
-          resultBox.innerHTML = "<p style='color:red;'>Please select a region.</p>";
+        // success path
+        const result = await response.json();
+        const pdfUrl = result.url || result.path;
+        if (!pdfUrl) {
+          resultBox.innerHTML = "<p style='color:red;'>No PDF URL returned from server.</p>";
+          generateBtn.disabled = false;
           return;
         }
 
-        response = await fetch('/generate-pdf/regional', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            region,
-            include_products_image: includeImages
-          })
-        });
+        const filename = result.filename || 'line_card.pdf';
+        resultBox.innerHTML = `
+          <p><strong>${result.message}</strong></p>
+          <iframe src="${pdfUrl}" width="100%" height="500px"></iframe><br>
+          <div class="download_btn_container">
+            <a class="download_btn" href="${pdfUrl}" download="${filename}">Download PDF</a>
+          </div>
+        `;
+      } catch (err) {
+        resultBox.innerHTML = `<p style="color:red;">Network or client error: ${err.message}</p>`;
+      } finally {
+        generateBtn.disabled = false;
       }
-
-      const result = await response.json();
-      const pdfUrl = result.path;
-
-      const filename = result.filename || 'line_card.pdf';
-      resultBox.innerHTML = `
-        <p><strong>${result.message}</strong></p>
-        <iframe src="${pdfUrl}" width="100%" height="500px"></iframe><br>
-        <div class="download_btn_container">
-          <a class="download_btn" href="${pdfUrl}" download="${filename}">Download PDF</a>
-        </div>
-      `;
     });
   });
-</script>
+  </script>
 </body>
 </html>
