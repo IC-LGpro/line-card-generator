@@ -54,6 +54,10 @@ def generate_regional_pdf():
         output_path = os.path.join("output", filename)
 
         airtable_records = fetch_airtable_records(region)
+        logging.info("Regional PDF request for region=%s returned %d grouped records", region, len(airtable_records or {}))
+        if not airtable_records:
+            return jsonify({"error": "No records found for region"}), 404
+
         generate_pdf(
             airtable_records,
             logo_path=f"assets/{region}Logo.jpg",
@@ -62,9 +66,13 @@ def generate_regional_pdf():
             include_products_image="yes" if include_images else "no"
         )
 
+        # Return a web-accessible URL path (not the filesystem path)
+        url_path = f"/output/{filename}"
+
         return jsonify({
             "message": f"{region.title()} Line Card PDF generated successfully.",
-            "path": output_path,
+            "path": url_path,
+            "url": url_path,
             "filename": filename
         })
     except Exception as e:
@@ -87,6 +95,10 @@ def generate_state_pdf():
         output_path = os.path.join("output", filename)
 
         airtable_records = fetch_airtable_records(region, state=state)
+        logging.info("State PDF request for state=%s region=%s returned %d grouped records", state, region, len(airtable_records or {}))
+        if not airtable_records:
+            return jsonify({"error": "No records found for state"}), 404
+
         generate_pdf_state(
             airtable_records,
             logo_path=f"assets/{region}Logo.jpg",
@@ -95,9 +107,12 @@ def generate_state_pdf():
             state=state
         )
 
+        url_path = f"/output/{filename}"
+
         return jsonify({
             "message": f"{state.title()} Line Card PDF generated successfully.",
-            "path": output_path,
+            "path": url_path,
+            "url": url_path,
             "filename": filename
         })
     except Exception as e:
