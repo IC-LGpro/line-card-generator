@@ -10,26 +10,28 @@ load_dotenv()
 def fetch_airtable_records(region, state=None):
     """
     Fetch all records from the Airtable table with pagination.
-    Returns a list of records.
+    Returns a dictionary grouped by parent company.
+    Raises exceptions with helpful messages on failure.
     """
-    # Airtable API Setup using the Marketing Base/Line-Card-Item Table
-
     url = "https://api.airtable.com/v0/appDsGXHk2qjpghDU/tblSsgAiKeTkRTTxn"
     pat = os.getenv("AIRTABLE_PAT")  # Personal access token ID with read and write access
-    headers = {"Authorization": f"Bearer {pat}"}  # "Authorization: Bearer YOUR_TOKEN"
+    if not pat:
+        raise RuntimeError("Missing AIRTABLE_PAT environment variable")
 
-    all_records = [] # List to hold all records
-    params = {}     # Parameters for pagination
+    headers = {"Authorization": f"Bearer {pat}"}
 
-    # Gets all records with pagination
-    # Airtable API returns a maximum of 100 records per request, so we need to  
-    # loop through the pages until we get all records
+    all_records = []
+    params = {}
+
+    # pagination loop
     while True:
-        response = requests.get(url, headers=headers, params=params)
-        data = response.json()
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        if resp.status_code != 200:
+            # bubble up helpful error
+            raise RuntimeError(f"Airtable API returned status {resp.status_code}: {resp.text}")
+        data = resp.json()
         all_records.extend(data.get("records", []))
 
-        # Check if there's another page
         offset = data.get("offset")
         if offset:
             params["offset"] = offset
@@ -41,16 +43,20 @@ def fetch_airtable_records(region, state=None):
 
     # If filtering by state to further narrow down
     if state:
+        def normalize_manufacturer_states(val):
+            if isinstance(val, list):
+                return [s.strip().lower() for s in val]
+            elif isinstance(val, str):
+                return [s.strip().lower() for s in val.split(",")]
+            else:
+                return []
+
         filtered = [
             r for r in filtered
-            if state.lower() in([s.strip().lower() for s in r.get("Manufacturer States", [])] 
-                                if isinstance(r.get("Manufacturer States", ""), list)
-                                else [s.strip().lower() for s in r.get("Manufacturer States", "").split(",")]
-                )
-            ]
+            if state.lower() in normalize_manufacturer_states(r.get("Manufacturer States", ""))
+        ]
 
-
-    # Group by parent company 
+    # Group by parent company
     grouped = {}
 
     for record in filtered:
@@ -59,13 +65,11 @@ def fetch_airtable_records(region, state=None):
 
         if parent not in grouped:
             grouped[parent] = {
-            "parent": None,
-            "children": []}
-
+                "parent": None,
+                "children": []}
         if name == parent:
             grouped[parent]["parent"] = record
         else:
             grouped[parent]["children"].append(record)
-        
-    """Now all Comapnies should be in a dictionary with parent companies' records as keys and their children's records as values."""
+
     return dict(sorted(grouped.items(), key=lambda x: x[0].lower()))
