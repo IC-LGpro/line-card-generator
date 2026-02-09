@@ -13,12 +13,124 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def get_static_assets_dir() -> str:
+    """
+    Return the absolute filesystem path to the application's static/assets directory.
+
+    Order of resolution:
+    1. If running inside a Flask app context, use current_app.static_folder + '/assets'.
+    2. Otherwise, fallback to '<module_dir>/static/assets' relative to this utils.py file.
+
+    This centralizes the single source of truth for static asset lookup. Do not depend on CWD.
+    """
+    try:
+        # local import to avoid hard dependency at module import time
+        from flask import current_app
+        # current_app.static_folder is absolute path to the static folder
+        static_folder = getattr(current_app, "static_folder", None)
+        if static_folder:
+            path = os.path.join(static_folder, "assets")
+            return path
+    except Exception:
+        # not in a Flask app context, fallback
+        pass
+
+    # fallback: module-relative path -> ../static/assets
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(module_dir, "static", "assets")
+    return path
+
+# --- Asset helpers ---------------------------------------------------------
+def normalize_asset_key(s: str) -> str:
+    """
+    Normalize asset keys for comparison: lowercase, replace spaces with underscore,
+    remove non-alphanumeric/underscore characters, collapse multiple underscores.
+    """
+    if not s:
+        return ""
+    # Lowercase
+    out = s.lower()
+    # Replace spaces and hyphens with underscore
+    out = out.replace(" ", "_").replace("-", "_")
+    # Keep only alphanumerics and underscores
+    out = "".join(c if (c.isalnum() or c == "_") else "_" for c in out)
+    # Collapse multiple underscores
+    while "__" in out:
+        out = out.replace("__", "_")
+    return out.strip("_")
+
+def get_asset_image_path(base_name: str, assets_dir: str = None):
+    """
+    Given a base_name like "MidwestLogo_1" or "MidwestFooter",
+    return the first matching file path under assets_dir with extension priority:
+    .png, .jpg, .jpeg, .pdf (case-insensitive). If missing, return None and log.
+
+    If assets_dir is None, resolve via get_static_assets_dir() so callers never need to compute paths.
+    """
+    if not base_name:
+        return None
+
+    # resolve canonical assets dir if not provided
+    if not assets_dir:
+        assets_dir = get_static_assets_dir()
+
+    desired = normalize_asset_key(base_name)
+    exts = [".png", ".jpg", ".jpeg", ".pdf"]
+
+    try:
+        files = os.listdir(assets_dir)
+    except FileNotFoundError:
+        logger.warning("Assets directory does not exist: %s", assets_dir)
+        return None
+    except Exception:
+        logger.exception("Failed listing assets directory: %s", assets_dir)
+        return None
+
+    candidates = []
+    for fname in files:
+        name, ext = os.path.splitext(fname)
+        ext = ext.lower()
+        if ext not in exts:
+            continue
+        norm = normalize_asset_key(name)
+        if norm == desired:
+            # prefer earlier extension in exts order
+            candidates.append((exts.index(ext), os.path.join(assets_dir, fname)))
+    if not candidates:
+        logger.warning("Asset not found for base '%s' in %s", base_name, assets_dir)
+        return None
+    # sort by extension priority and return the best candidate
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
+
+def compute_image_display_height(image_path: str, target_width: float) -> float:
+    """
+    Compute the image height (points) when scaled to target_width preserving aspect ratio.
+    Returns 0 if the image_path is missing or unreadable.
+    """
+    if not image_path or not os.path.exists(image_path):
+        return 0
+    try:
+        img = ImageReader(image_path)
+        iw, ih = img.getSize()
+        if iw == 0:
+            return 0
+        scale = float(target_width) / float(iw)
+        return float(ih) * scale
+    except Exception:
+        logger.exception("Failed to compute image display height for %s", image_path)
+        return 0
+
+# --- Image helpers ---------------------------------------------------------
 def create_scaled_image(image_path, target_width, max_height=650):
+    """
+    Return an RLImage scaled to target_width while preserving aspect ratio.
+    If image can't be read, return a Paragraph placeholder.
+    """
     try:
         image_reader = ImageReader(image_path)
     except Exception:
         logger.warning("create_scaled_image: image not found or unreadable: %s", image_path)
-        # Return a Paragraph placeholder so calling code can continue
         return Paragraph("Image not available", getSampleStyleSheet()["Normal"])
 
     orig_width, orig_height = image_reader.getSize()
@@ -31,10 +143,120 @@ def create_scaled_image(image_path, target_width, max_height=650):
 
     return RLImage(image_path, width=target_width, height=target_height)
 
+def draw_image_on_canvas(canvas, image_path, x, y, width=None, keep_aspect=True, anchor_top=False):
+    """
+    Draw raster image on canvas.
+    - If anchor_top is False: y is bottom coordinate (ReportLab default).
+    - If anchor_top is True: y is top coordinate; image will be drawn so its top edge = y.
+    Returns drawn height (points) or 0 if skipped.
+    PDF images are skipped (log a warning).
+    """
+    if not image_path or not os.path.exists(image_path):
+        logger.debug("draw_image_on_canvas: image missing: %s", image_path)
+        return 0
+    _, ext = os.path.splitext(image_path)
+    ext = ext.lower()
+    if ext == ".pdf":
+        logger.warning("PDF asset rendering not implemented: %s (skipping)", image_path)
+        return 0
+    try:
+        img = ImageReader(image_path)
+        iw, ih = img.getSize()
+        if iw == 0:
+            return 0
+        if width:
+            scale = width / float(iw)
+            draw_w = width
+            draw_h = float(ih) * scale
+        else:
+            draw_w = iw
+            draw_h = ih
+
+        if anchor_top:
+            # y is top coordinate; compute bottom-left y
+            bottom_y = y - draw_h
+        else:
+            bottom_y = y
+
+        # ReportLab's drawImage expects bottom-left coordinates
+        canvas.drawImage(image_path, x, bottom_y, width=draw_w, height=draw_h, preserveAspectRatio=keep_aspect, mask='auto')
+        return draw_h
+    except Exception as ex:
+        logger.exception("Failed to draw image %s: %s", image_path, ex)
+        return 0
+
+# --- Page decorators for header/footer ------------------------------------
+def make_page_decorator(region_name: str, state_name: str = None, assets_dir: str = None):
+    """
+    Return a single function to be passed to doc.build for onFirstPage and onLaterPages.
+    Behavior:
+     - Header image base: "{RegionName}Logo_1" for page 1, "{RegionName}Logo_2" for later pages.
+     - Footer image base: "{RegionName}Footer" for all pages.
+     - If state_name provided, draw centered state_name text under the header (only on page 1).
+    The decorator will log missing assets and never raise.
+    """
+    if not assets_dir:
+        assets_dir = get_static_assets_dir()
+
+    def add_header_footer(canvas, doc):
+        try:
+            page_width, page_height = doc.pagesize
+            left = doc.leftMargin
+            # content_width still available for content calculations
+            content_width = page_width - doc.leftMargin - doc.rightMargin
+
+            # determine header variant
+            page_num = canvas.getPageNumber()
+            header_variant = 1 if page_num == 1 else 2
+            header_base = f"{region_name}Logo_{header_variant}"
+            header_path = get_asset_image_path(header_base, assets_dir=assets_dir)
+
+            header_height = 0
+            if header_path:
+                # draw header top-aligned to page top and spanning full page width (not constrained by margins)
+                header_height = draw_image_on_canvas(canvas, header_path, 0, page_height, width=page_width, anchor_top=True)
+                if header_height == 0:
+                    header_height = int(0.9 * inch)
+            else:
+                header_height = int(0.9 * inch)
+                logger.warning("Missing header asset for region=%s variant=%s", region_name, header_variant)
+
+            # If state_name is present, draw it centered under the header with configurable padding only on page 1
+            if state_name and page_num == 1:
+                # Increased top padding above State Name (affects page 1 only)
+                state_padding_top = 28  # points (increased from 12)
+                state_font_size = 20
+                # place baseline of text below header by padding; text_y is baseline
+                text_y = page_height - header_height - state_padding_top
+                canvas.setFont("Helvetica-Bold", state_font_size)
+                canvas.setFillColorRGB(0, 0, 0)
+                canvas.drawCentredString(page_width / 2.0, text_y, state_name.title())
+
+            # Footer: use {RegionName}Footer on every page (draw full page width, bottom-aligned)
+            footer_base = f"{region_name}Footer"
+            footer_path = get_asset_image_path(footer_base, assets_dir=assets_dir)
+            if footer_path:
+                # draw footer bottom-aligned at y=0 spanning full page width
+                draw_image_on_canvas(canvas, footer_path, 0, 0, width=page_width, anchor_top=False)
+            else:
+                # fallback: draw a rule line across content area
+                canvas.setStrokeColorRGB(0.5, 0.5, 0.5)
+                canvas.setLineWidth(0.5)
+                canvas.line(left, 30, left + content_width, 30)
+                logger.warning("Missing footer asset for region=%s", region_name)
+        except Exception:
+            logger.exception("Error in page decorator for region=%s state=%s", region_name, state_name)
+    return add_header_footer
+
+# --- Existing table-building that downloads logos from Airtable -----------
 def build_table_content(airtable_records, downloaded_logos):
     styles = getSampleStyleSheet()
     styleN = styles["Normal"]
     tables = []
+
+    # Base directory for temporary logos under static assets
+    base_temp_dir = os.path.join(get_static_assets_dir(), "temp_logos")
+    os.makedirs(base_temp_dir, exist_ok=True)
 
     for parent_name, group in airtable_records.items():
         parent = group["parent"]
@@ -48,11 +270,7 @@ def build_table_content(airtable_records, downloaded_logos):
         if parent_logo_info:
             try:
                 logo_url = parent_logo_info[0].get("url")
-                logo_filename = f"assets/temp_logos/logo_{safe_parent}.png"
-                # Ensure directory exists before writing
-                temp_dir = os.path.dirname(logo_filename)
-                os.makedirs(temp_dir, exist_ok=True)
-
+                logo_filename = os.path.join(base_temp_dir, f"logo_{safe_parent}.png")
                 resp = requests.get(logo_url, timeout=30)
                 if resp.status_code == 200:
                     with open(logo_filename, "wb") as f:
@@ -74,10 +292,7 @@ def build_table_content(airtable_records, downloaded_logos):
             if child_logo_info:
                 try:
                     logo_url = child_logo_info[0].get("url")
-                    logo_filename = f"assets/temp_logos/child_logo_{safe_parent}_{i}.png"
-                    temp_dir = os.path.dirname(logo_filename)
-                    os.makedirs(temp_dir, exist_ok=True)
-
+                    logo_filename = os.path.join(base_temp_dir, f"child_logo_{safe_parent}_{i}.png")
                     resp = requests.get(logo_url, timeout=30)
                     if resp.status_code == 200:
                         with open(logo_filename, "wb") as f:
@@ -117,145 +332,6 @@ def build_table_content(airtable_records, downloaded_logos):
         tables.append(Spacer(1, 12))
 
     return tables, downloaded_logos
-
-# Function to build the footer content
-def build_footer(region):
-    icon_path = "assets/regionalIcon.jpg"
-    icon = create_scaled_image(icon_path, target_width=0.5 * inch)
-    website = "<b>www.lawlessgroup.com</b>"
-
-    # Define styles for the footer
-    website_style = ParagraphStyle(
-        name="WebsiteStyle",
-        fontSize=11,
-        alignment=1,  # 2 = right-align
-        wordWrap='CJK',  # Left-to-right, avoids breaking words
-        spaceShrinkage=0.05,
-        allowWindows=1,
-        allowOrphans=1  # Slightly compresses spaces to fit more
-    )
-
-    address_style = ParagraphStyle(
-        name="FooterAddressStyle",
-        fontSize=9,  # Smaller font size
-        leading=10,  # Line spacing
-        alignment=1,  # Centered (use 0 for left-aligned)
-        spaceAfter=2
-    )
-
-    # Default values
-    contact_info_1 = ""
-    contact_info_2 = ""
-    columns = []
-    col_widths = []
-
-    # Determine footer content based on region
-    if region in ["west", "pacific northwest"]:
-        contact_info_1 = (
-            "TEAMWEST@LAWLESSGROUP.COM<br/>"
-            "4451 Eucalyptus Ave. #330<br/>"
-            "Chino, CA 91710<br/>"
-            "909-606-9111"
-        )
-        columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
-        col_widths = [0.7 * inch, 4.8 * inch, 2 * inch]
-
-    elif region == "southwest":
-        contact_info_1 = (
-            "11625 Columbia Center Drive, Ste. 100<br/>"
-            "Dallas, TX 75299<br/>"
-            "P: 972-247-8871<br/>"
-            "F: 972-620-1147"
-
-        )
-        contact_info_2 = (
-            "13323 S. Gessner Road, Ste.100<br/>"
-            "Missouri City, TX 77489<br/>"
-            "P: 281-491-0351<br/>"
-            "F: 281-491-0367"
-        )
-        columns = [
-            icon,
-            Paragraph(contact_info_1, address_style),
-            Paragraph(contact_info_2, address_style),
-            Paragraph(website, website_style)
-        ]
-        col_widths = [0.7 * inch, 2.4 * inch, 2.4 * inch, 1.9 * inch]
-
-    elif region == "rockies":
-        contact_info_1 = (
-            "18146 Easy 84th Ave<br/>"
-            "Commerce City, CO 80022<br/>"
-            "719-315-7780"
-        )
-        contact_info_2 = (
-            "3812 W. California Ave<br/>"
-            "Salt Lake City, UT 84104<br/>"
-            "801-301-8327"
-        )
-        columns = [
-            icon,
-            Paragraph(contact_info_1, address_style),
-            Paragraph(contact_info_2, address_style),
-            Paragraph(website, website_style)
-        ]
-        col_widths = [0.7 * inch, 2.4 * inch, 2.4 * inch, 1.9 * inch]
-
-    elif region == "east":
-        contact_info_1 = (
-            "TEAMEAST@LAWLESSGROUP.COM<br/>"
-            "2590 Ocoee Apopka Road, Suite 100<br/>"
-            "Apopka, FL 32703<br/>"
-            "407-831-6676"
-        )
-        columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
-        col_widths = [0.7 * inch, 4.8 * inch, 2.0 * inch]
-
-    elif region == "midwest":
-        contact_info_1 = (
-            "Mike.Fisher@lawlessgroup.com | Tim.Weber@lawlessgroup.com<br/>"
-            "55 W. Army Trail Road, Suite 102<br/>"
-            "Glendale Heights, IL 60108<br/>"
-            "630-931-5636"
-        )
-        columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
-        col_widths = [0.7 * inch, 4.8 * inch, 2.0 * inch]
-
-    elif region == "north central":
-        contact_info_1 = (
-            "3225 Harvester Rd.<br/>"
-            "Kansas City, KS 66115<br/>"
-            "816-472-5033"
-        )
-        columns = [icon, Paragraph(contact_info_1, address_style), Paragraph(website, website_style)]
-        col_widths = [0.7 * inch, 4.8 * inch, 2.0 * inch]
-
-    # Defalt footer layout 
-    footer_table = Table([columns], colWidths=col_widths)
-    footer_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (-1, 0), (-1, 0), "CENTER"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4), 
-        ("LEFTPADDING", (0, 0), (0, 0), 4), # Left adding for the footer icon
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-    ]))
-
-    return footer_table
-
-def make_footer(region):
-
-    # This function will be called to add the footer to each page
-    def add_footer(canvas, doc):
-
-        # You can dynamically determine the region here if needed
-        footer = build_footer(region)
-
-        # Wrap and draw the footer at the bottom of the page
-        w, h = footer.wrap(doc.width, doc.bottomMargin)
-        footer.drawOn(canvas, doc.leftMargin, 20)
-    return add_footer
 
 def del_downloaded_logos(downloaded_logos):
     for logo_filename in downloaded_logos:

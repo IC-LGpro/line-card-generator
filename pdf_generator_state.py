@@ -6,57 +6,64 @@ from datetime import datetime
 import os
 from reportlab.platypus import KeepTogether
 
-from utils import create_scaled_image, build_table_content, make_footer, del_downloaded_logos, cleanup_output_folder
+from utils import create_scaled_image, build_table_content, make_page_decorator, del_downloaded_logos, cleanup_output_folder, get_asset_image_path, compute_image_display_height
 
-def create_state_header(state, logo_path):
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        name="StateTitleStyle",
-        fontSize=24,
-        leading=28,
-        alignment=1,  # Centered
-        fontName="Helvetica-Bold",
-        spaceAfter=20
-    )
-    current_year = datetime.now().year
-    title_text = f"{current_year} Line Card - {state.title()}"
+def generate_pdf_state(airtable_records, output_path, region, state):
+    """
+    Generate a state-specific PDF using the region's header/footer assets.
+    Draw a centered state name under the header on page 1 only.
+    """
+    # Page and content margins
+    PAGE_WIDTH, PAGE_HEIGHT = letter
+    left_margin = 36
+    right_margin = 36
+    content_width = PAGE_WIDTH - left_margin - right_margin
 
-    header_elements = []
+    # Resolve header/footer asset paths and compute heights scaled to full page width
+    header1_path = get_asset_image_path(f"{region}Logo_1")
+    header2_path = get_asset_image_path(f"{region}Logo_2")
+    footer_path = get_asset_image_path(f"{region}Footer")
 
-    # Add logo if it exists
-    if os.path.exists(logo_path):
-        logo = create_scaled_image(logo_path, target_width=4 * inch)
-        logo_table = Table([[logo]], colWidths=[6.5 * inch])
-        logo_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ]))
-        header_elements.append(logo_table)
-        header_elements.append(Spacer(1, 10))
+    header1_h = compute_image_display_height(header1_path, PAGE_WIDTH) or (0.9 * inch)
+    header2_h = compute_image_display_height(header2_path, PAGE_WIDTH) or (0.9 * inch)
+    footer_h = compute_image_display_height(footer_path, PAGE_WIDTH) or (0.5 * inch)
 
-    # Add title
-    header_elements.append(Paragraph(title_text, title_style))
-    header_elements.append(Spacer(1, 20))
+    # State label typography and padding
+    state_font_size = 20  # larger, prominent
+    # Increased top padding so the State Name on page 1 is visually separated from the header
+    state_padding_top = 28
+    state_padding_bottom = 12
+    state_text_height = state_font_size  # approximate baseline-to-top measure
 
-    return header_elements
+    # Reserve space for later pages (use later-page header height) so pages 2+ don't get extra gap
+    later_reserved_top = header2_h + 8  # small padding under later-page header
+    reserved_bottom = footer_h + 6
 
-def generate_pdf_state(airtable_records, output_path, logo_path, region, state):
-    doc = SimpleDocTemplate(output_path, pagesize=letter, topMargin=36, bottomMargin=48, leftMargin=36, rightMargin=36)
+    # Compute first-page-only spacer needed so page 1 content sits under header1 + state label
+    first_page_total_needed = header1_h + state_padding_top + state_text_height + state_padding_bottom
+    first_page_extra = max(0, first_page_total_needed - later_reserved_top)
+
+    doc = SimpleDocTemplate(output_path, pagesize=letter, topMargin=later_reserved_top, bottomMargin=reserved_bottom, leftMargin=left_margin, rightMargin=right_margin)
     elements = []
     downloaded_logos = []
 
-    # Header with logo and state title
-    header_elements = create_state_header(state, logo_path)
-    elements.append(KeepTogether(header_elements))
+    # Insert a first-page-only spacer so the content on page 1 sits below header_1 + state label area
+    if first_page_extra > 0:
+        elements.append(Spacer(1, first_page_extra))
+
+    # Add a small spacer so story doesn't immediately butt up to reserved area
+    elements.append(Spacer(1, 8))
 
     # Table content
     tables, downloaded_logos = build_table_content(airtable_records, downloaded_logos)
     elements.extend(tables)
 
-    # Footer
-    doc.build(elements, onFirstPage=make_footer(region), onLaterPages=make_footer(region))
+    # Page decorator will draw header (Logo_1 on page1, Logo_2 on others) and footer using the region.
+    # Provide state_name so decorator draws the centered state under the header on page 1 only.
+    page_decorator = make_page_decorator(region, state_name=state.title())
+
+    doc.build(elements, onFirstPage=page_decorator, onLaterPages=page_decorator)
 
     # Cleanup
     del_downloaded_logos(downloaded_logos)
     cleanup_output_folder()
-    

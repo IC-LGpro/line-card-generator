@@ -74,9 +74,6 @@
       </div>
 
       <div id="regionalSection" class="hidden">
-        <label for="include_images">Include Product Images?</label>
-        <input type="checkbox" id="include_images" name="include_images"><br><br>
-
         <label for="region">Select Region:</label>
         <select id="region" name="region">
           <option value="">--Select Region--</option>
@@ -140,7 +137,6 @@
           });
         } else {
           const region = document.getElementById('region').value;
-          const includeImages = document.getElementById('include_images').checked;
 
           if (!region) {
             resultBox.innerHTML = "<p style='color:red;'>Please select a region.</p>";
@@ -152,8 +148,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              region,
-              include_products_image: includeImages
+              region
             })
           });
         }

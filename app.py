@@ -13,8 +13,14 @@ logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, static_url_path='/static', static_folder='static')
 
-# Ensure output folder exists (helps avoid 404s when serving generated PDFs)
+# Ensure output and temp folders exist (helps avoid 404s when serving generated PDFs)
 os.makedirs("output", exist_ok=True)
+
+# Ensure static/assets and static/assets/temp_logos exist (use app.static_folder for robust absolute paths)
+static_assets_dir = os.path.join(app.static_folder, "assets")
+static_temp_logos = os.path.join(static_assets_dir, "temp_logos")
+os.makedirs(static_assets_dir, exist_ok=True)
+os.makedirs(static_temp_logos, exist_ok=True)
 
 # Maps for region and state
 REGION_STATE_MAP = {
@@ -59,7 +65,6 @@ def generate_regional_pdf():
     try:
         data = request.get_json(silent=True) or {}
         region = (data.get("region", "") or "").lower()
-        include_images = data.get("include_products_image", False)
 
         if region not in REGION_STATE_MAP:
             return jsonify({"error": "Invalid region name."}), 400
@@ -73,14 +78,14 @@ def generate_regional_pdf():
         if not airtable_records:
             return jsonify({"error": "No records found for region"}), 404
 
+        # generate_pdf now uses assets for header/footer; product-image option removed
         generate_pdf(
             airtable_records,
-            logo_path=f"assets/{region}Logo.jpg",
             output_path=output_path,
-            region=region,
-            include_products_image="yes" if include_images else "no"
+            region=region
         )
 
+        # Return a web-accessible URL path (not the filesystem path)
         url_path = f"/output/{filename}"
 
         return jsonify({
@@ -116,9 +121,9 @@ def generate_state_pdf():
         if not airtable_records:
             return jsonify({"error": "No records found for state"}), 404
 
+        # generate_pdf_state now accepts region + state and uses assets for header/footer and state label
         generate_pdf_state(
             airtable_records,
-            logo_path=f"assets/{region}Logo.jpg",
             output_path=output_path,
             region=region,
             state=state

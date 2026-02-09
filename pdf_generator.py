@@ -7,110 +7,60 @@ from datetime import datetime
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import KeepTogether
 
-from utils import create_scaled_image, build_table_content, make_footer, del_downloaded_logos, cleanup_output_folder
+from utils import create_scaled_image, build_table_content, make_page_decorator, del_downloaded_logos, cleanup_output_folder, get_asset_image_path, compute_image_display_height
 
-# Function creates the company logo table (the first element on the pdf)
-def create_cologo_table(logo_path):
-   # Add Company logo
-    if os.path.exists(logo_path):
-        company_logo = create_scaled_image(logo_path, target_width=4 * inch)
-        logo_table = Table([[company_logo]], colWidths=[6.5 * inch])
-        logo_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ]))
-    return logo_table
+# Primary function to generate the PDF (region-level)
+def generate_pdf(airtable_records, output_path, region, state=None):
+    """
+    airtable_records: grouped dict
+    output_path: filesystem path to write PDF
+    region: region name (string)
+    state: optional (kept for compatibility)
+    """
 
-def create_header_with_product_image(logo_path, region):
-    elements = []
+    # Page and content margins
+    PAGE_WIDTH, PAGE_HEIGHT = letter
+    left_margin = 36
+    right_margin = 36
+    content_width = PAGE_WIDTH - left_margin - right_margin
 
-    # Load company logo
-    cologo = create_scaled_image(logo_path, target_width=3 * inch)
+    # Resolve header/footer asset paths and compute heights scaled to full page width
+    header1_path = get_asset_image_path(f"{region}Logo_1")
+    header2_path = get_asset_image_path(f"{region}Logo_2")
+    footer_path = get_asset_image_path(f"{region}Footer")
 
-    # Create title
-    current_year = datetime.now().year
-    title_text = f"{current_year} Line Card"
-    title_style = ParagraphStyle(
-        name="TitleStyle",
-        fontSize=24,
-        leading=22,
-        alignment=2,  # Right-align
-        fontName="Helvetica-Bold"
-    )
-    title = Paragraph(title_text, title_style)
+    header1_h = compute_image_display_height(header1_path, PAGE_WIDTH) or (0.9 * inch)
+    header2_h = compute_image_display_height(header2_path, PAGE_WIDTH) or (0.9 * inch)
+    footer_h = compute_image_display_height(footer_path, PAGE_WIDTH) or (0.5 * inch)
 
-    # Top row: logo and title
-    top_table = Table([[cologo, title]], colWidths=[3.25 * inch, 3.25 * inch])
-    top_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-    ]))
-    elements.append(top_table)
+    # Reserve space for later pages (use later-page header height) so pages 2+ don't get extra gap
+    later_reserved_top = header2_h + 8  # small padding under later-page header
+    reserved_bottom = footer_h + 6  # small padding above footer
 
-    # Bottom row: products image
-    product_image_path = f"assets/{region}_products_image.jpg"
-    if os.path.exists(product_image_path):
-        product_image = create_scaled_image(product_image_path, target_width=8.5 * inch)
-        product_table = Table([[product_image]], colWidths=[6.5 * inch])
-        product_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ]))
-        elements.append(product_table)
-    else:
-        elements.append(Paragraph("Product image not found", getSampleStyleSheet()["Normal"]))
+    # Compute first-page-only extra spacer to account for larger first-page header (if any)
+    first_page_extra = max(0, (header1_h - header2_h) + 8)  # add small padding
 
-    return elements
+    doc = SimpleDocTemplate(output_path, pagesize=letter, topMargin=later_reserved_top, bottomMargin=reserved_bottom, leftMargin=left_margin, rightMargin=right_margin)
+    elements = []  # will be used to store the elements of the PDF
+    downloaded_logos = []  # List to keep track of temporarily downloaded logos from the Airtable records
 
-# Primary function to generate the PDF
-def generate_pdf(airtable_records, output_path, logo_path, region, include_products_image):
-    # 1. Prepare PDF
-    doc = SimpleDocTemplate(output_path, pagesize=letter, topMargin=36, bottomMargin=48, leftMargin=36, rightMargin=36)
-    elements = [] # will be used to store the elmenets of the PDF
-    downloaded_logos = [] # List to keep track of temporarily downloaded logos from the Airtable records
+    # Insert a first-page-only spacer so page 1 content aligns under the taller header_1
+    if first_page_extra > 0:
+        elements.append(Spacer(1, first_page_extra))
 
-    # 2. Add Company logo & title
-    if include_products_image=="yes":
-        header_elements = create_header_with_product_image(logo_path, region)
-        elements.append(KeepTogether(header_elements))
-        elements.append(Spacer(1, 15))
-    else:
-        logo = create_scaled_image(logo_path, target_width=4 * inch)
-        logo_table = Table([[logo]], colWidths=[6.5 * inch])
-        logo_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ]))
-        elements.append(logo_table)
-        elements.append(Spacer(1, 10))
+    # Add a small spacer so story doesn't immediately butt up to reserved area
+    elements.append(Spacer(1, 12))
 
-        current_year = datetime.now().year
-        title_text = f"{current_year} Line Card"
-        title_style = ParagraphStyle(
-            name="TitleStyle",
-            fontSize=24,
-            leading=22,
-            alignment=1,  # Center-align
-            spaceAfter=12,
-            fontName="Helvetica-Bold"
-        )
-        title_paragraph = Paragraph(title_text, title_style)
-        elements.append(title_paragraph)
-        elements.append(Spacer(1, 15))
-        
-    # 4. Add the table content
+    # Add the table content
     tables, downloaded_logos = build_table_content(airtable_records, downloaded_logos)
     elements.extend(tables)
 
-    # 5. Build PDF w/ footer
-    doc.build(elements, onFirstPage=make_footer(region), onLaterPages=make_footer(region))
-    print("PDF with aligned containers created successfully.")
+    # Page decorator handles header/footer drawing; pass region and optional state (None here)
+    page_decorator = make_page_decorator(region, state_name=None)
 
-    # 6. Clean up downloaded logo files
+    # Build PDF with page decorator applied to both first and later pages
+    doc.build(elements, onFirstPage=page_decorator, onLaterPages=page_decorator)
+
+    # Clean up downloaded logo files
     del_downloaded_logos(downloaded_logos)
     cleanup_output_folder()
