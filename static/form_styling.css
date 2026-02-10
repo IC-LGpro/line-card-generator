@@ -40,8 +40,10 @@ body {
     width: 100%;
     max-width: 420px; /* slightly larger form width for better UX */
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    background: #fff;
+    background: #e35525;
     box-sizing: border-box;
+    text-align-last: center;
+    color: #fafafa; /* Controls the text color */
 }
 
 /* Typography and spacing */
@@ -49,6 +51,7 @@ h1 {
     text-align: center;
     margin-top: 0;
     margin-bottom: 12px;
+    color: #fafafa;
 }
 
 form div {

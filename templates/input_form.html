@@ -132,7 +132,7 @@
         if (pdfType === 'state') {
           const state = document.getElementById('stateDropdown').value;
           if (!state) {
-            resultBox.innerHTML = "<p style='color:red;'>Please select a state.</p>";
+            resultBox.innerHTML = "<p style='color:#fafafa;'>Please select a state.</p>";
             generateBtn.disabled = false;
             return;
           }
@@ -146,7 +146,7 @@
           const region = document.getElementById('region').value;
 
           if (!region) {
-            resultBox.innerHTML = "<p style='color:red;'>Please select a region.</p>";
+            resultBox.innerHTML = "<p style='color:#fafafa;'>Please select a region.</p>";
             generateBtn.disabled = false;
             return;
           }
