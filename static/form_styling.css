@@ -42,7 +42,7 @@ body {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     background: #e35525;
     box-sizing: border-box;
-    text-align-last: center;
+    text-align: center;
     color: #fafafa; /* Controls the text color */
 }
 
