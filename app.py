@@ -25,11 +25,11 @@ os.makedirs(static_temp_logos, exist_ok=True)
 # Maps for region and state
 REGION_STATE_MAP = {
     "midwest": ["illinois", "indiana", "michigan", "wisconsin"],
-    "west": ["california", "nevada", "arizona", "hawaii", "new mexico", "hawaii"],
+    "west": ["california", "nevada", "hawaii", "new mexico"],
     "east": ["florida", "georgia", "alabama", "tennessee", "kentucky", "north carolina", "south carolina", "virginia",
              "new york", "massachusetts", "connecticut", "ohio", "pennsylvania", "new jersey", "maryland", "delaware",
              "rhode island", "maine", "new hampshire", "vermont", "west virginia"],
-    "southwest": ["texas", "arkansas", "oklahoma", "louisiana", "mississippi"],
+    "southwest": ["texas", "arkansas", "oklahoma", "louisiana", "mississippi", "arizona", "tennessee"],
     "north central": ["minnesota", "north dakota", "south dakota", "iowa", "nebraska", "kansas", "missouri"],
     "pacific northwest": ["oregon", "washington", "alaska"],
     "rockies": ["colorado", "utah", "montana", "wyoming", "idaho"]
