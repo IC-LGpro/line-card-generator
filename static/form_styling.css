@@ -34,7 +34,7 @@ body {
 
 /* Container constrains form width while allowing banner to remain full-width */
 .container {
-    border: 2px solid #000000;
+    border: 1.5px solid #000000;
     border-radius: 10px;
     padding: 20px;
     width: 100%;
