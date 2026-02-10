@@ -9,88 +9,95 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Generate Line Card PDF</h1>
-    <form id="pdfForm">
-      <label>Choose PDF Type:</label><br>
-      <input type="radio" name="pdf_type" value="state" required> State<br>
-      <input type="radio" name="pdf_type" value="regional"> Regional<br><br>
+  <!-- Banner: full-width, responsive. Uses Flask static path -->
+  <header class="site-banner" role="banner">
+    <img class="banner-img" src="{{ url_for('static', filename='assets/Banner.jpg') }}" alt="Lawless Group Banner">
+  </header>
 
-      <div id="stateSection" class="hidden">
-        <label for="state">Select State:</label>
-        <select id="stateDropdown" name="stateDropdown">
-          <option value="">--Select State--</option>
-          <option value="alabama">Alabama</option>
-          <option value="alaska">Alaska</option>
-          <option value="arizona">Arizona</option>
-          <option value="arkansas">Arkansas</option>
-          <option value="california">California</option>
-          <option value="colorado">Colorado</option>
-          <option value="connecticut">Connecticut</option>
-          <option value="delaware">Delaware</option>
-          <option value="florida">Florida</option>
-          <option value="georgia">Georgia</option>
-          <option value="hawaii">Hawaii</option>
-          <option value="idaho">Idaho</option>
-          <option value="illinois">Illinois</option>
-          <option value="indiana">Indiana</option>
-          <option value="iowa">Iowa</option>
-          <option value="kansas">Kansas</option>
-          <option value="kentucky">Kentucky</option>
-          <option value="louisiana">Louisiana</option>
-          <option value="maine">Maine</option>
-          <option value="maryland">Maryland</option>
-          <option value="massachusetts">Massachusetts</option>
-          <option value="michigan">Michigan</option>
-          <option value="minnesota">Minnesota</option>
-          <option value="mississippi">Mississippi</option>
-          <option value="missouri">Missouri</option>
-          <option value="montana">Montana</option>
-          <option value="nebraska">Nebraska</option>
-          <option value="nevada">Nevada</option>
-          <option value="new_hampshire">New Hampshire</option>
-          <option value="new_jersey">New Jersey</option>
-          <option value="new_mexico">New Mexico</option>
-          <option value="new_york">New York</option>
-          <option value="north_carolina">North Carolina</option>
-          <option value="north_dakota">North Dakota</option>
-          <option value="ohio">Ohio</option>
-          <option value="oklahoma">Oklahoma</option>
-          <option value="oregon">Oregon</option>
-          <option value="pennsylvania">Pennsylvania</option>
-          <option value="rhode_island">Rhode Island</option>
-          <option value="south_carolina">South Carolina</option>
-          <option value="south_dakota">South Dakota</option>
-          <option value="tennessee">Tennessee</option>
-          <option value="texas">Texas</option>
-          <option value="utah">Utah</option>
-          <option value="vermont">Vermont</option>
-          <option value="virginia">Virginia</option>
-          <option value="washington">Washington</option>
-          <option value="west_virginia">West Virginia</option>
-          <option value="wisconsin">Wisconsin</option>
-          <option value="wyoming">Wyoming</option>
-        </select><br><br>
-      </div>
+  <main class="page-content" role="main">
+    <div class="container">
+      <h1>Generate Line Card PDF</h1>
+      <form id="pdfForm">
+        <label>Choose PDF Type:</label><br>
+        <input type="radio" name="pdf_type" value="state" required> State<br>
+        <input type="radio" name="pdf_type" value="regional"> Regional<br><br>
 
-      <div id="regionalSection" class="hidden">
-        <label for="region">Select Region:</label>
-        <select id="region" name="region">
-          <option value="">--Select Region--</option>
-          <option value="east">East</option>
-          <option value="midwest">Midwest</option>
-          <option value="north central">North Central</option>
-          <option value="pacific northwest">Pacific Northwest</option>
-          <option value="rockies">Rockies</option>
-          <option value="southwest">Southwest</option>
-          <option value="west">West</option>
-        </select><br><br>
-      </div>
+        <div id="stateSection" class="hidden">
+          <label for="state">Select State:</label>
+          <select id="stateDropdown" name="stateDropdown">
+            <option value="">--Select State--</option>
+            <option value="alabama">Alabama</option>
+            <option value="alaska">Alaska</option>
+            <option value="arizona">Arizona</option>
+            <option value="arkansas">Arkansas</option>
+            <option value="california">California</option>
+            <option value="colorado">Colorado</option>
+            <option value="connecticut">Connecticut</option>
+            <option value="delaware">Delaware</option>
+            <option value="florida">Florida</option>
+            <option value="georgia">Georgia</option>
+            <option value="hawaii">Hawaii</option>
+            <option value="idaho">Idaho</option>
+            <option value="illinois">Illinois</option>
+            <option value="indiana">Indiana</option>
+            <option value="iowa">Iowa</option>
+            <option value="kansas">Kansas</option>
+            <option value="kentucky">Kentucky</option>
+            <option value="louisiana">Louisiana</option>
+            <option value="maine">Maine</option>
+            <option value="maryland">Maryland</option>
+            <option value="massachusetts">Massachusetts</option>
+            <option value="michigan">Michigan</option>
+            <option value="minnesota">Minnesota</option>
+            <option value="mississippi">Mississippi</option>
+            <option value="missouri">Missouri</option>
+            <option value="montana">Montana</option>
+            <option value="nebraska">Nebraska</option>
+            <option value="nevada">Nevada</option>
+            <option value="new_hampshire">New Hampshire</option>
+            <option value="new_jersey">New Jersey</option>
+            <option value="new_mexico">New Mexico</option>
+            <option value="new_york">New York</option>
+            <option value="north_carolina">North Carolina</option>
+            <option value="north_dakota">North Dakota</option>
+            <option value="ohio">Ohio</option>
+            <option value="oklahoma">Oklahoma</option>
+            <option value="oregon">Oregon</option>
+            <option value="pennsylvania">Pennsylvania</option>
+            <option value="rhode_island">Rhode Island</option>
+            <option value="south_carolina">South Carolina</option>
+            <option value="south_dakota">South Dakota</option>
+            <option value="tennessee">Tennessee</option>
+            <option value="texas">Texas</option>
+            <option value="utah">Utah</option>
+            <option value="vermont">Vermont</option>
+            <option value="virginia">Virginia</option>
+            <option value="washington">Washington</option>
+            <option value="west_virginia">West Virginia</option>
+            <option value="wisconsin">Wisconsin</option>
+            <option value="wyoming">Wyoming</option>
+          </select><br><br>
+        </div>
 
-      <button id="generateBtn" type="submit">Generate PDF</button>
-    </form>
-    <div id="resultBox" style="margin-top: 20px;"></div>
-  </div>
+        <div id="regionalSection" class="hidden">
+          <label for="region">Select Region:</label>
+          <select id="region" name="region">
+            <option value="">--Select Region--</option>
+            <option value="east">East</option>
+            <option value="midwest">Midwest</option>
+            <option value="north central">North Central</option>
+            <option value="pacific northwest">Pacific Northwest</option>
+            <option value="rockies">Rockies</option>
+            <option value="southwest">Southwest</option>
+            <option value="west">West</option>
+          </select><br><br>
+        </div>
+
+        <button id="generateBtn" type="submit">Generate PDF</button>
+      </form>
+      <div id="resultBox" style="margin-top: 20px;"></div>
+    </div>
+  </main>
 
   <script>
   document.addEventListener('DOMContentLoaded', function () {
