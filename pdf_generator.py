@@ -91,7 +91,7 @@ def generate_pdf(airtable_records, output_path, region, state=None):
     try:
         disclaimer_style = ParagraphStyle("DisclaimerStyle", parent=getSampleStyleSheet()["Normal"], textColor=colors.red)
         elements.append(Spacer(1, 8))
-        elements.append(Paragraph("Disclaimer: Every manufacturer is not in every state.", disclaimer_style))
+        elements.append(Paragraph("Disclaimer: Every manufacturer may not be represented in every state.", disclaimer_style))
     except Exception:
         logger.exception("Failed to append disclaimer paragraph to PDF")
 
