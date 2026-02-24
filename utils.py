@@ -250,6 +250,15 @@ def make_page_decorator(region_name: str, state_name: str = None, assets_dir: st
 
 # --- Existing table-building that downloads logos from Airtable -----------
 def build_table_content(airtable_records, downloaded_logos):
+    """
+    Build flowable tables for each parent group.
+
+    - Parents with children: single-column full-width block.
+      * Top: single-row logos (parent first, then child logos) scaled to fit in one line.
+      * Below: parent description (if present), then each child line "ChildName: Description" (or description-only if name missing).
+    - Parents without children: unchanged two-column layout (left logo ? 2.0in column, right description ? 5.0in).
+    Returns (tables, downloaded_logos).
+    """
     styles = getSampleStyleSheet()
     styleN = styles["Normal"]
     tables = []
@@ -258,14 +267,94 @@ def build_table_content(airtable_records, downloaded_logos):
     base_temp_dir = os.path.join(get_static_assets_dir(), "temp_logos")
     os.makedirs(base_temp_dir, exist_ok=True)
 
+    # total width for single-column parent-with-children rows (preserve original col widths)
+    total_row_width = 2.0 * inch + 5.0 * inch
+
+    # Default sizes for parent-only rows (must NOT change)
+    PARENT_LOGO_W_DEFAULT = 1.4 * inch
+    CHILD_LOGO_W_DEFAULT = 0.6 * inch
+
+    # Sizes for parent-with-children single-line row (initial target sizes)
+    PARENT_LOGO_W_TARGET = 1.6 * inch
+    CHILD_LOGO_W_TARGET = 0.8 * inch
+
+    # Spacing/gap config
+    DEFAULT_LOGO_GAP = 8   # pts between logos initially
+    MIN_LOGO_GAP = 2       # pts minimum gap if we must reduce
+    MIN_CHILD_LOGO_W = 0.4 * inch  # reasonable minimum child logo width
+
+    def compute_scale_and_gap(count_parent, count_children, parent_target_w, child_target_w,
+                              gap, max_width, left_padding=10, right_padding=0):
+        """
+        Compute a uniform scale factor to apply to parent and child logo widths so the single
+        logos row fits within max_width - left_padding - right_padding.
+
+        Returns (scale, effective_gap).
+        Algorithm:
+        - Compute required width = sum(default widths) + gap*(n-1).
+        - If fits, scale=1, gap unchanged.
+        - Else compute scale = available / required.
+        - Enforce that scaled child widths do not go below MIN_CHILD_LOGO_W if possible:
+            - If scale would make child < MIN_CHILD_LOGO_W, try bump scale to min_scale (min allowed)
+              and reduce gap down to MIN_LOGO_GAP to see if it fits.
+            - If still doesn't fit, set scale = available / (sum_default_widths + MIN_LOGO_GAP*(n-1)) (may go below min).
+        """
+        n_logos = (1 if count_parent else 0) + count_children
+        if n_logos == 0:
+            return 1.0, gap
+
+        available = float(max_width - left_padding - right_padding)
+        # default widths array
+        widths = []
+        if count_parent:
+            widths.append(float(parent_target_w))
+        widths.extend([float(child_target_w) for _ in range(count_children)])
+        required = sum(widths) + gap * (n_logos - 1)
+
+        if required <= available:
+            return 1.0, gap
+
+        # initial scale to fit
+        scale = available / required
+
+        # enforce minimum child width if possible
+        if count_children > 0:
+            child_min_scale = float(MIN_CHILD_LOGO_W / child_target_w)
+            if scale < child_min_scale:
+                # try using the min child scale and reduce gap to MIN_LOGO_GAP
+                scaled_sum = sum(widths) * child_min_scale
+                required_with_min_gap = scaled_sum + MIN_LOGO_GAP * (n_logos - 1)
+                if required_with_min_gap <= available:
+                    return child_min_scale, MIN_LOGO_GAP
+                else:
+                    # as fallback, compute a scale that fits with MIN_LOGO_GAP (may be < child_min_scale)
+                    scale_with_min_gap = available / (sum(widths) + MIN_LOGO_GAP * (n_logos - 1))
+                    return scale_with_min_gap, MIN_LOGO_GAP
+        # No children or min enforcement not needed
+        return scale, gap
+
+    # Track whether we've already emitted a missing-name warning this build to avoid spam
+    missing_name_warned = False
+    attempted_keys = [
+        "Manufacturer Names",
+        "Manufacturer Name",
+        "Manufacturer",
+        "Name",
+        "Company",
+        "Title",
+        "Display Name"
+    ]
+
     for parent_name, group in airtable_records.items():
         parent = group["parent"]
-        children = group["children"]
+        children = group.get("children", []) or []
 
         # sanitize parent_name for filenames
         safe_parent = "".join(c if (c.isalnum() or c in (' ', '_', '-')) else '_' for c in (parent_name or "unknown"))
         safe_parent = safe_parent.replace(' ', '_')
 
+        # ---- DOWNLOAD LOGOS, but store filenames (do NOT finalize scaled flowables yet) ----
+        parent_logo_filename = None
         parent_logo_info = parent.get("Logos", []) if parent else []
         if parent_logo_info:
             try:
@@ -276,17 +365,15 @@ def build_table_content(airtable_records, downloaded_logos):
                     with open(logo_filename, "wb") as f:
                         f.write(resp.content)
                     downloaded_logos.append(logo_filename)
-                    parent_logo = create_scaled_image(logo_filename, target_width=1.4 * inch)
+                    parent_logo_filename = logo_filename
                 else:
                     logger.warning("Failed to download parent logo %s: status %s", logo_url, resp.status_code)
-                    parent_logo = Paragraph("No Logo", styleN)
+                    parent_logo_filename = None
             except Exception as ex:
                 logger.exception("Error downloading parent logo for %s: %s", parent_name, ex)
-                parent_logo = Paragraph("No Logo", styleN)
-        else:
-            parent_logo = Paragraph("No Logo", styleN)
+                parent_logo_filename = None
 
-        child_logos = []
+        child_logo_filenames = []
         for i, child in enumerate(children):
             child_logo_info = child.get("Logos", [])
             if child_logo_info:
@@ -298,33 +385,172 @@ def build_table_content(airtable_records, downloaded_logos):
                         with open(logo_filename, "wb") as f:
                             f.write(resp.content)
                         downloaded_logos.append(logo_filename)
-                        child_logo = create_scaled_image(logo_filename, target_width=0.6 * inch)
-                        child_logos.append(child_logo)
+                        child_logo_filenames.append(logo_filename)
                     else:
                         logger.warning("Failed to download child logo %s: status %s", logo_url, resp.status_code)
                 except Exception as ex:
                     logger.exception("Error downloading child logo for %s child %d: %s", parent_name, i, ex)
 
-        description = parent.get("Description", "No description available.") if parent else "No description available."
-        description_paragraph = Paragraph(description, styleN)
+        # Parent description (may be empty)
+        description = parent.get("Description", "").strip() if parent else ""
+        description_paragraph = Paragraph(description or "No description available.", styleN)
+
+        # ---- Parent WITHOUT children: keep original two-column layout (unchanged) ----
+        if not children:
+            # Use existing default parent-only logo width behavior
+            if parent_logo_filename:
+                left_cell = create_scaled_image(parent_logo_filename, target_width=PARENT_LOGO_W_DEFAULT)
+            else:
+                left_cell = Paragraph("No Logo", styleN)
+
+            right_column = [description_paragraph]
+
+            row = [left_cell, right_column]
+            table = Table([row], colWidths=[2.0 * inch, 5.0 * inch])
+            table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("LEFTPADDING", (0, 0), (0, 0), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            tables.append(table)
+            tables.append(Spacer(1, 12))
+            continue
+
+        # ---- Parent WITH children: single-column full-width block, single-line logos only ----
+
+        # Prepare ordered filenames for logos: include parent (if file exists) then children
+        logos_filenames = []
+        include_parent_logo = bool(parent_logo_filename)
+        if include_parent_logo:
+            logos_filenames.append(parent_logo_filename)
+        logos_filenames.extend(child_logo_filenames)
+
+        if not logos_filenames:
+            # No logos at all -> placeholder flowable row
+            logos_row_flowables = [Paragraph("No Logos", styleN)]
+            # assemble the rest as before (no scaling needed)
+            right_column_content = [logos_row_flowables[0], Spacer(1, 6)]
+            if description:
+                right_column_content.append(description_paragraph)
+                right_column_content.append(Spacer(1, 4))
+            for child in children:
+                child_name = resolve_display_name(child)
+                child_desc = child.get("Description", "")
+                if child_name:
+                    # bold only child name
+                    if child_desc and child_desc.strip():
+                        right_column_content.append(Paragraph(f"<b>{child_name}</b>: {child_desc}", styleN))
+                    else:
+                        right_column_content.append(Paragraph(f"<b>{child_name}</b>", styleN))
+                else:
+                    # log once
+                    if not missing_name_warned:
+                        child_keys = list(child.keys()) if isinstance(child, dict) else []
+                        logger.warning(
+                            "Missing child display name under parent=%s. child keys=%s. attempted keys=%s",
+                            parent_name, child_keys, attempted_keys
+                        )
+                        missing_name_warned = True
+                    if child_desc and child_desc.strip():
+                        right_column_content.append(Paragraph(child_desc, styleN))
+                    else:
+                        right_column_content.append(Paragraph("(Unnamed)", styleN))
+
+            row = [right_column_content]
+            table = Table([row], colWidths=[total_row_width])
+            table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            tables.append(table)
+            tables.append(Spacer(1, 12))
+            continue
+
+        # Compute initially intended widths (points) for each logo in order
+        intended_widths = []
+        for idx, fname in enumerate(logos_filenames):
+            if idx == 0 and include_parent_logo:
+                intended_widths.append(float(PARENT_LOGO_W_TARGET))
+            else:
+                intended_widths.append(float(CHILD_LOGO_W_TARGET))
+
+        # Compute scale and effective gap using helper
+        scale, effective_gap = compute_scale_and_gap(
+            count_parent=1 if include_parent_logo else 0,
+            count_children=len(child_logo_filenames),
+            parent_target_w=PARENT_LOGO_W_TARGET,
+            child_target_w=CHILD_LOGO_W_TARGET,
+            gap=DEFAULT_LOGO_GAP,
+            max_width=total_row_width,
+            left_padding=10,
+            right_padding=0
+        )
+
+        # Apply scale to intended widths
+        scaled_widths = [w * scale for w in intended_widths]
+
+        # Build flowables for logos with scaled widths
+        logos_flowables = []
+        for idx, fname in enumerate(logos_filenames):
+            target_w = scaled_widths[idx]
+            try:
+                img_flow = create_scaled_image(fname, target_width=target_w)
+                logos_flowables.append(img_flow)
+            except Exception:
+                logger.exception("Failed to create image flowable for %s", fname)
+                logos_flowables.append(Paragraph("No Logo", styleN))
+
+        # Single-line logos row (no wrapping) represented as a single table row
+        logos_table = Table([logos_flowables])
+        logos_table.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("RIGHTPADDING", (0, 0), (-1, -1), effective_gap),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ]))
 
         right_column_content = []
-        if child_logos:
-            child_logo_table = Table([child_logos])
-            child_logo_table.setStyle(TableStyle([
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]))
-            right_column_content.append(child_logo_table)
+        right_column_content.append(logos_table)
+        right_column_content.append(Spacer(1, 6))
+
+        # Descriptions: parent (if present) then child lines (using resolve_display_name)
+        if description:
+            right_column_content.append(description_paragraph)
             right_column_content.append(Spacer(1, 4))
 
-        right_column_content.append(description_paragraph)
+        for child in children:
+            child_name = resolve_display_name(child)
+            child_desc = child.get("Description", "")
+            if not child_name:
+                if not missing_name_warned:
+                    child_keys = list(child.keys()) if isinstance(child, dict) else []
+                    logger.warning(
+                        "Missing child display name under parent=%s. child keys=%s. attempted keys=%s",
+                        parent_name, child_keys, attempted_keys
+                    )
+                    missing_name_warned = True
+                if child_desc and child_desc.strip():
+                    right_column_content.append(Paragraph(child_desc, styleN))
+                else:
+                    right_column_content.append(Paragraph("(Unnamed)", styleN))
+            else:
+                # bold only the child name, keep description normal
+                if child_desc and child_desc.strip():
+                    right_column_content.append(Paragraph(f"<b>{child_name}</b>: {child_desc}", styleN))
+                else:
+                    right_column_content.append(Paragraph(f"<b>{child_name}</b>", styleN))
 
-        row = [parent_logo, right_column_content]
-        table = Table([row], colWidths=[2.0 * inch, 5.0 * inch])
+        # Assemble single-column table spanning combined width
+        row = [right_column_content]
+        table = Table([row], colWidths=[total_row_width])
         table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("LEFTPADDING", (0, 0), (0, 0), 10),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
             ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
@@ -349,3 +575,63 @@ def cleanup_output_folder(folder="output", max_age_seconds=60):
             if file_age > max_age_seconds:
                 os.remove(filepath)
                 print(f"Deleted {filepath}")
+
+def resolve_display_name(record):
+    """
+    Resolve a display name from an Airtable record dict.
+
+    Tries keys in order:
+      - "Manufacturer Names"
+      - "Manufacturer Name"
+      - "Manufacturer"
+      - "Name"
+      - "Company"
+      - "Title"
+      - "Display Name"
+
+    Supports nested shapes like {"fields": {...}} by checking record.get("fields", {}).
+    If the found value is a list, returns the first non-empty element joined as string.
+    Returns None if no name found.
+    """
+    if not isinstance(record, dict):
+        return None
+
+    # Support nested 'fields' wrapper
+    candidate_sources = [record]
+    if "fields" in record and isinstance(record.get("fields"), dict):
+        candidate_sources.insert(0, record["fields"])
+
+    lookup_keys = [
+        "Manufacturer Names",
+        "Manufacturer Name",
+        "Manufacturer",
+        "Name",
+        "Company",
+        "Title",
+        "Display Name"
+    ]
+
+    for src in candidate_sources:
+        for k in lookup_keys:
+            if k in src:
+                val = src.get(k)
+                if val is None:
+                    continue
+                # If list, choose first non-empty element (common in Airtable multi-select)
+                if isinstance(val, list):
+                    for item in val:
+                        if isinstance(item, str) and item.strip():
+                            return item.strip()
+                    # if list but empty strings, continue searching other keys
+                    continue
+                # If not list, coerce to string
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+                # If other types, convert to str
+                try:
+                    s = str(val).strip()
+                    if s:
+                        return s
+                except Exception:
+                    continue
+    return None
